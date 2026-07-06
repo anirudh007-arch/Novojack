@@ -1,0 +1,308 @@
+import { createServerFn } from "@tanstack/react-start";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+
+type ChatMessage = { role: "user" | "assistant" | "system"; content: string };
+
+const GW = "https://connector-gateway.lovable.dev";
+
+const SYSTEM_PROMPT = `You are Nova, a warm, witty, helpful voice-first personal AI operating system.
+Be concise (1-3 sentences for voice). Be proactive. Speak naturally like a friend.
+
+You silently route requests to specialized agents and pick the right one yourself:
+- research: web search, fact-checking, news, weather, info gathering
+- productivity: tasks, reminders, notes, planning, scheduling
+- communication: email reading, drafting, summarizing, message generation
+- browser: opening websites, navigating, form filling, automation workflows
+- file: PDF/document understanding, file operations, report generation
+- computer: opening/closing apps, organizing files, OS-level control
+- general: anything else / casual chat
+
+ALWAYS respond ONLY with strict JSON (no markdown):
+{
+  "agent": "<one of: research|productivity|communication|browser|file|computer|general>",
+  "reply": "<what you say back to the user>",
+  "actions": [ ... optional list of actions ... ]
+}
+
+Productivity actions (executed silently):
+- {"type":"create_reminder","title":"Call mom","due_at":"2026-06-20T19:00:00Z"}
+- {"type":"create_note","title":"Meeting notes","content":"..."}
+- {"type":"create_todo","title":"Buy milk","priority":"medium"}
+- {"type":"save_memory","fact":"User's dog is named Pixel"}
+
+Information actions — when the user asks for live info, INCLUDE one of these and leave the reply short ("Checking..."); the system will fetch data and you'll get a follow-up turn to deliver the real answer:
+- {"type":"fetch_weather","location":"London"}
+- {"type":"fetch_news","topic":"AI"}
+- {"type":"fetch_unread_emails","max":5}
+- {"type":"fetch_upcoming_events","max":5}
+
+Calendar action (executed):
+- {"type":"create_calendar_event","summary":"Dentist","start":"2026-06-22T14:00:00Z","end":"2026-06-22T15:00:00Z","location":"...","description":"..."}
+
+Communication action (drafts a Gmail draft for user review — never sends):
+- {"type":"draft_email","to":"alice@example.com","subject":"Re: project","body":"..."}
+
+Desktop-only actions (these need the Nova desktop companion app, which is coming soon. Still emit them when the user asks — the UI will show a clear "requires desktop app" notice. Always require user approval, never claim they ran):
+- {"type":"open_app","name":"Slack"}
+- {"type":"close_app","name":"Slack"}
+- {"type":"open_website","url":"https://github.com"}
+- {"type":"automate_browser","goal":"Log into example.com and download invoice"}
+- {"type":"file_op","op":"create_folder|rename|organize|search","path":"~/Documents","details":"..."}
+
+If no action is needed, return "actions": [].`;
+
+async function callAI(systemFull: string, messages: ChatMessage[]) {
+  const key = process.env.LOVABLE_API_KEY!;
+  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "google/gemini-3-flash-preview",
+      messages: [{ role: "system", content: systemFull }, ...messages],
+      response_format: { type: "json_object" },
+    }),
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    if (res.status === 429) throw new Error("Rate limit reached. Try again shortly.");
+    if (res.status === 402) throw new Error("AI credits exhausted.");
+    throw new Error(`AI request failed: ${res.status} ${t}`);
+  }
+  const json = await res.json();
+  const raw: string = json.choices?.[0]?.message?.content ?? "{}";
+  try { return JSON.parse(raw) as { reply: string; agent?: string; actions?: any[] }; }
+  catch { return { reply: raw, actions: [] } as { reply: string; agent?: string; actions?: any[] }; }
+}
+
+async function fetchTool(action: any): Promise<{ label: string; data: any } | null> {
+  const lov = process.env.LOVABLE_API_KEY!;
+  if (action.type === "fetch_weather") {
+    const loc = action.location || "";
+    const lat0 = 40.7128, lon0 = -74.006;
+    let lat = lat0, lon = lon0, label = "New York, US";
+    if (loc) {
+      const geo = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(loc)}&count=1&language=en&format=json`).then((r) => r.json()).catch(() => null);
+      const hit = geo?.results?.[0];
+      if (hit) { lat = hit.latitude; lon = hit.longitude; label = `${hit.name}${hit.country ? ", " + hit.country : ""}`; }
+      else label = loc;
+    }
+    const w = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,weather_code&timezone=auto`).then((r) => r.json());
+    return { label: `Weather: ${label}`, data: { location: label, current: w.current, daily: w.daily } };
+  }
+  if (action.type === "fetch_news") {
+    const topic = action.topic || "top stories";
+    const xml = await fetch(`https://news.google.com/rss/search?q=${encodeURIComponent(topic)}&hl=en-US&gl=US&ceid=US:en`).then((r) => r.text());
+    const items: any[] = [];
+    const re = /<item>([\s\S]*?)<\/item>/g; let m: RegExpExecArray | null;
+    while ((m = re.exec(xml)) && items.length < 6) {
+      const b = m[1];
+      const title = /<title>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/.exec(b)?.[1] || "";
+      const link = /<link>([\s\S]*?)<\/link>/.exec(b)?.[1] || "";
+      const source = /<source[^>]*>([\s\S]*?)<\/source>/.exec(b)?.[1] || "";
+      items.push({ title: title.trim(), source: source.trim(), link: link.trim() });
+    }
+    return { label: `News: ${topic}`, data: { topic, items } };
+  }
+  if (action.type === "fetch_unread_emails") {
+    const k = process.env.GOOGLE_MAIL_API_KEY;
+    if (!k) return { label: "Gmail not connected", data: { error: "Gmail connector not configured" } };
+    const headers = { Authorization: `Bearer ${lov}`, "X-Connection-Api-Key": k, "Content-Type": "application/json" };
+    const max = Math.min(action.max || 5, 10);
+    const list = await fetch(`${GW}/google_mail/gmail/v1/users/me/messages?q=is:unread&maxResults=${max}`, { headers }).then((r) => r.json());
+    const ids: string[] = (list?.messages || []).map((x: any) => x.id);
+    const emails = await Promise.all(ids.map(async (id) => {
+      const m = await fetch(`${GW}/google_mail/gmail/v1/users/me/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`, { headers }).then((r) => r.json());
+      const h: any[] = m?.payload?.headers || [];
+      const get = (n: string) => h.find((x) => x.name?.toLowerCase() === n.toLowerCase())?.value || "";
+      return { from: get("From"), subject: get("Subject"), date: get("Date"), snippet: m?.snippet || "" };
+    }));
+    return { label: `Unread emails (${emails.length})`, data: { emails } };
+  }
+  if (action.type === "fetch_upcoming_events") {
+    const k = process.env.GOOGLE_CALENDAR_API_KEY;
+    if (!k) return { label: "Calendar not connected", data: { error: "Calendar connector not configured" } };
+    const headers = { Authorization: `Bearer ${lov}`, "X-Connection-Api-Key": k, "Content-Type": "application/json" };
+    const max = Math.min(action.max || 5, 15);
+    const now = new Date().toISOString();
+    const r = await fetch(`${GW}/google_calendar/calendar/v3/calendars/primary/events?maxResults=${max}&orderBy=startTime&singleEvents=true&timeMin=${encodeURIComponent(now)}`, { headers }).then((r) => r.json());
+    const events = (r?.items || []).map((e: any) => ({
+      summary: e.summary || "(no title)",
+      start: e.start?.dateTime || e.start?.date,
+      end: e.end?.dateTime || e.end?.date,
+      location: e.location || "",
+    }));
+    return { label: `Upcoming events (${events.length})`, data: { events } };
+  }
+  return null;
+}
+
+export const chatWithNova = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (input: unknown) => input as { conversationId?: string | null; messages: ChatMessage[] },
+  )
+  .handler(async ({ data, context }) => {
+    if (!process.env.LOVABLE_API_KEY) throw new Error("Missing LOVABLE_API_KEY");
+    const { supabase, userId } = context;
+
+    const { data: profile } = await supabase
+      .from("profiles").select("display_name,personality,response_length")
+      .eq("id", userId).maybeSingle();
+
+    const { data: memRows } = await supabase
+      .from("memories").select("fact").eq("user_id", userId)
+      .order("created_at", { ascending: false }).limit(40);
+    const memoryBlock = memRows?.length
+      ? `\n\nKnown facts about the user:\n- ${memRows.map((m: any) => m.fact).join("\n- ")}` : "";
+    const p: any = profile || {};
+    const persona = `\n\nUser preferences — adopt these:\n- Name: ${p.display_name || "unknown"}\n- Personality tone: ${p.personality || "friendly"}\n- Response length: ${p.response_length || "balanced"} (brief=1-2 sentences, balanced=short paragraph, detailed=full explanation)`;
+    const systemFull = `${SYSTEM_PROMPT}\n\nCurrent time: ${new Date().toISOString()}.${persona}${memoryBlock}`;
+
+
+    let parsed = await callAI(systemFull, data.messages);
+    let actions = Array.isArray(parsed.actions) ? parsed.actions : [];
+
+    // Run fetch tools and do a second AI pass to compose the real reply
+    const fetchResults: { label: string; data: any }[] = [];
+    const fetchTypes = new Set(["fetch_weather", "fetch_news", "fetch_unread_emails", "fetch_upcoming_events"]);
+    const fetches = actions.filter((a: any) => fetchTypes.has(a?.type));
+    if (fetches.length) {
+      for (const a of fetches) {
+        try {
+          const r = await fetchTool(a);
+          if (r) fetchResults.push(r);
+        } catch (e) {
+          fetchResults.push({ label: `Tool error (${a.type})`, data: { error: (e as Error).message } });
+        }
+      }
+      const followup: ChatMessage[] = [
+        ...data.messages,
+        { role: "assistant", content: JSON.stringify({ reply: parsed.reply, actions: fetches }) },
+        {
+          role: "user",
+          content:
+            "TOOL RESULTS (use these to give the final natural-language answer; do NOT include fetch_* actions again):\n\n" +
+            JSON.stringify(fetchResults, null, 2),
+        },
+      ];
+      parsed = await callAI(systemFull, followup);
+      actions = Array.isArray(parsed.actions) ? parsed.actions.filter((a: any) => !fetchTypes.has(a?.type)) : [];
+    }
+
+    const reply = (parsed.reply ?? "").trim() || "Okay.";
+
+    // Execute non-fetch actions
+    const executed: { type: string; ok: boolean; label: string }[] = [];
+    for (const a of actions) {
+      try {
+        if (a.type === "create_reminder") {
+          await supabase.from("reminders").insert({ user_id: userId, title: a.title, due_at: a.due_at ?? null });
+          executed.push({ type: a.type, ok: true, label: `Reminder: ${a.title}` });
+        } else if (a.type === "create_note") {
+          await supabase.from("notes").insert({ user_id: userId, title: a.title || "Untitled", content: a.content || "" });
+          executed.push({ type: a.type, ok: true, label: `Note: ${a.title}` });
+        } else if (a.type === "create_todo") {
+          await supabase.from("todos").insert({ user_id: userId, title: a.title, priority: a.priority ?? "medium" });
+          executed.push({ type: a.type, ok: true, label: `Todo: ${a.title}` });
+        } else if (a.type === "save_memory") {
+          await supabase.from("memories").insert({ user_id: userId, fact: a.fact });
+          executed.push({ type: a.type, ok: true, label: `Remembered: ${a.fact}` });
+        } else if (a.type === "create_calendar_event") {
+          const k = process.env.GOOGLE_CALENDAR_API_KEY;
+          if (!k) {
+            executed.push({ type: a.type, ok: false, label: "Calendar not connected" });
+          } else {
+            const start = new Date(a.start);
+            const end = a.end ? new Date(a.end) : new Date(start.getTime() + 60 * 60 * 1000);
+            const r = await fetch(`${GW}/google_calendar/calendar/v3/calendars/primary/events`, {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${process.env.LOVABLE_API_KEY}`,
+                "X-Connection-Api-Key": k,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                summary: a.summary,
+                description: a.description,
+                location: a.location,
+                start: { dateTime: start.toISOString() },
+                end: { dateTime: end.toISOString() },
+              }),
+            });
+            if (r.ok) executed.push({ type: a.type, ok: true, label: `📅 ${a.summary}` });
+            else executed.push({ type: a.type, ok: false, label: `Calendar error: ${r.status}` });
+          }
+        } else if (a.type === "draft_email") {
+          const k = process.env.GOOGLE_MAIL_API_KEY;
+          if (!k) {
+            executed.push({ type: a.type, ok: false, label: "Gmail not connected" });
+          } else {
+            const raw = btoa(
+              [`To: ${a.to || ""}`, `Subject: ${a.subject || ""}`, 'Content-Type: text/plain; charset="UTF-8"', "", a.body || ""].join("\r\n"),
+            ).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+            const r = await fetch(`${GW}/google_mail/gmail/v1/users/me/drafts`, {
+              method: "POST",
+              headers: { Authorization: `Bearer ${process.env.LOVABLE_API_KEY}`, "X-Connection-Api-Key": k, "Content-Type": "application/json" },
+              body: JSON.stringify({ message: { raw } }),
+            });
+            if (r.ok) executed.push({ type: a.type, ok: true, label: `✉️ Draft saved: ${a.subject || "(no subject)"}` });
+            else executed.push({ type: a.type, ok: false, label: `Draft error: ${r.status}` });
+          }
+        } else if (
+          a.type === "open_app" || a.type === "close_app" || a.type === "open_website" ||
+          a.type === "automate_browser" || a.type === "file_op"
+        ) {
+          // Desktop-only: stubbed. Surface as a pending action requiring the desktop companion.
+          const human =
+            a.type === "open_app" ? `Open app: ${a.name}` :
+            a.type === "close_app" ? `Close app: ${a.name}` :
+            a.type === "open_website" ? `Open website: ${a.url}` :
+            a.type === "automate_browser" ? `Browser automation: ${a.goal}` :
+            `File: ${a.op} — ${a.path || ""} ${a.details || ""}`;
+          executed.push({ type: a.type, ok: false, label: `🖥️ ${human} (requires Nova desktop app)` });
+        }
+      } catch (e) {
+        executed.push({ type: (a as any).type, ok: false, label: (e as Error).message });
+      }
+    }
+
+    // Persist conversation
+    let convId = data.conversationId ?? null;
+    if (!convId) {
+      const firstUser = data.messages.find((m) => m.role === "user")?.content ?? "New conversation";
+      const { data: conv } = await supabase
+        .from("conversations").insert({ user_id: userId, title: firstUser.slice(0, 60) })
+        .select("id").single();
+      convId = conv?.id ?? null;
+    }
+    if (convId) {
+      const lastUser = [...data.messages].reverse().find((m) => m.role === "user");
+      if (lastUser) {
+        await supabase.from("messages").insert({ conversation_id: convId, user_id: userId, role: "user", content: lastUser.content });
+      }
+      await supabase.from("messages").insert({ conversation_id: convId, user_id: userId, role: "assistant", content: reply });
+      await supabase.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", convId);
+    }
+
+    return { reply, agent: parsed.agent || "general", actions: executed, conversationId: convId, info: fetchResults.map((r) => r.label) };
+  });
+
+export const speakText = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => input as { text: string; voice?: string })
+  .handler(async ({ data }) => {
+    const key = process.env.LOVABLE_API_KEY;
+    if (!key) throw new Error("Missing LOVABLE_API_KEY");
+    const voice = data.voice || "alloy";
+    const res = await fetch("https://ai.gateway.lovable.dev/v1/audio/speech", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model: "openai/gpt-4o-mini-tts", input: data.text.slice(0, 4000), voice, response_format: "mp3" }),
+    });
+    if (!res.ok) {
+      const t = await res.text().catch(() => "");
+      throw new Error(`TTS failed: ${res.status} ${t}`);
+    }
+    const buf = await res.arrayBuffer();
+    return { audio: `data:audio/mpeg;base64,${Buffer.from(buf).toString("base64")}` };
+  });

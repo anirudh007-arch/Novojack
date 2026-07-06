@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Nova Desktop Companion</title>
+  <style>
+    :root { color-scheme: dark; }
+    body { margin:0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; background:#0b0d12; color:#e7e9ee; }
+    header { padding:16px 20px; border-bottom:1px solid #1d2230; display:flex; align-items:center; justify-content:space-between; }
+    h1 { margin:0; font-size:16px; font-weight:600; letter-spacing:-0.01em; }
+    .badge { font-size:11px; padding:3px 8px; border-radius:999px; background:#1b2030; color:#9aa3b2; }
+    main { padding:20px; display:grid; gap:16px; }
+    .card { background:#11141c; border:1px solid #1d2230; border-radius:14px; padding:16px; }
+    .card h2 { margin:0 0 8px; font-size:13px; font-weight:600; color:#9aa3b2; text-transform:uppercase; letter-spacing:0.06em; }
+    pre { background:#0a0c12; border:1px solid #1d2230; border-radius:10px; padding:10px; font-size:12px; max-height:180px; overflow:auto; white-space:pre-wrap; word-break:break-all; }
+    button { background:#3b82f6; color:white; border:none; border-radius:10px; padding:8px 14px; font-size:13px; font-weight:500; cursor:pointer; }
+    button.secondary { background:#1d2230; color:#e7e9ee; }
+    button.danger { background:#ef4444; }
+    button:hover { filter:brightness(1.1); }
+    .row { display:flex; gap:8px; flex-wrap:wrap; }
+    .approval { border:1px solid #f59e0b; background:linear-gradient(180deg, rgba(245,158,11,0.10), transparent); }
+    textarea { width:100%; min-height:90px; background:#0a0c12; color:#e7e9ee; border:1px solid #1d2230; border-radius:10px; padding:10px; font-family:inherit; font-size:12px; box-sizing:border-box; }
+    code { background:#0a0c12; padding:1px 6px; border-radius:6px; font-size:11px; }
+    .muted { color:#9aa3b2; font-size:12px; }
+    .log { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🛰️ Nova Desktop Companion</h1>
+    <span class="badge" id="status">listening on 127.0.0.1:43117</span>
+  </header>
+
+  <main>
+    <section class="card" id="approval-card" style="display:none">
+      <h2>⚠️ Action requires approval</h2>
+      <p id="approval-summary" style="margin:4px 0 10px; font-weight:600;"></p>
+      <pre id="approval-body"></pre>
+      <div class="row" style="margin-top:10px">
+        <button id="btn-approve">Approve & run</button>
+        <button id="btn-deny" class="danger">Deny</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Paste an action</h2>
+      <textarea id="paste" placeholder='{"type":"file_op","op":"create_folder","path":"~/Documents/Nova"}'></textarea>
+      <div class="row" style="margin-top:8px">
+        <button id="btn-run-paste">Run</button>
+        <button class="secondary" id="btn-sample-folder">Sample: create folder</button>
+        <button class="secondary" id="btn-sample-browser">Sample: browser</button>
+        <button class="secondary" id="btn-sample-open">Sample: open app</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Last result</h2>
+      <pre id="result" class="log">—</pre>
+    </section>
+
+    <section class="card">
+      <h2>Pairing</h2>
+      <p class="muted">The web app authenticates with a session token. Token stored in <code>~/.nova-companion/token</code>.</p>
+      <div class="row">
+        <button class="secondary" id="btn-show-token">Show token</button>
+        <button class="secondary" id="btn-open-folder">Open token folder</button>
+      </div>
+      <pre id="token" style="margin-top:10px; display:none"></pre>
+    </section>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    let currentApproval = null;
+    nova.onIncomingAction(({ id, action, summary }) => {
+      currentApproval = id;
+      $("approval-card").style.display = "block";
+      $("approval-summary").textContent = summary;
+      $("approval-body").textContent = JSON.stringify(action, null, 2);
+    });
+
+    $("btn-approve").onclick = async () => {
+      if (!currentApproval) return;
+      await nova.approve(currentApproval, true);
+      $("approval-card").style.display = "none";
+      currentApproval = null;
+    };
+    $("btn-deny").onclick = async () => {
+      if (!currentApproval) return;
+      await nova.approve(currentApproval, false);
+      $("approval-card").style.display = "none";
+      currentApproval = null;
+    };
+
+    $("btn-run-paste").onclick = async () => {
+      try {
+        const action = JSON.parse($("paste").value);
+        const res = await nova.runLocal(action);
+        $("result").textContent = JSON.stringify(res, null, 2);
+      } catch (e) {
+        $("result").textContent = "Error: " + e.message;
+      }
+    };
+
+    $("btn-sample-folder").onclick = () => {
+      $("paste").value = JSON.stringify({ type: "file_op", op: "create_folder", path: "~/Documents/Nova" }, null, 2);
+    };
+    $("btn-sample-browser").onclick = () => {
+      $("paste").value = JSON.stringify({
+        type: "automate_browser",
+        goal: "Screenshot github.com",
+        steps: [
+          { action: "goto", url: "https://github.com" },
+          { action: "wait", ms: 1000 },
+          { action: "screenshot", path: "~/Desktop/github.png" }
+        ]
+      }, null, 2);
+    };
+    $("btn-sample-open").onclick = () => {
+      const name = navigator.platform.includes("Mac") ? "Calculator"
+        : navigator.platform.includes("Win") ? "calc.exe" : "gnome-calculator";
+      $("paste").value = JSON.stringify({ type: "open_app", name }, null, 2);
+    };
+
+    $("btn-show-token").onclick = async () => {
+      const t = await nova.getToken();
+      $("token").style.display = "block";
+      $("token").textContent = t;
+    };
+    $("btn-open-folder").onclick = () => nova.openTokenFolder();
+  </script>
+</body>
+</html>

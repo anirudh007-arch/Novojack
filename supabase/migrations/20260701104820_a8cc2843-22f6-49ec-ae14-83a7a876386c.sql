@@ -1,0 +1,6 @@
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS personality TEXT NOT NULL DEFAULT 'friendly',
+  ADD COLUMN IF NOT EXISTS response_length TEXT NOT NULL DEFAULT 'balanced',
+  ADD COLUMN IF NOT EXISTS wake_word TEXT NOT NULL DEFAULT 'Hey Nova',
+  ADD COLUMN IF NOT EXISTS location TEXT,
+  ADD COLUMN IF NOT EXISTS accent_color TEXT NOT NULL DEFAULT 'violet';

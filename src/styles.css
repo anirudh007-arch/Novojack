@@ -1,0 +1,161 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ring-offset-background: var(--background);
+  --color-nova-cyan: var(--nova-cyan);
+  --color-nova-violet: var(--nova-violet);
+  --color-nova-pink: var(--nova-pink);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+/* Nova AI - dark-first cosmic theme */
+:root {
+  --radius: 0.875rem;
+  --background: oklch(0.16 0.03 270);
+  --foreground: oklch(0.98 0.005 270);
+  --card: oklch(0.21 0.035 270 / 70%);
+  --card-foreground: oklch(0.98 0.005 270);
+  --popover: oklch(0.19 0.035 270);
+  --popover-foreground: oklch(0.98 0.005 270);
+  --primary: oklch(0.78 0.17 220);
+  --primary-foreground: oklch(0.16 0.03 270);
+  --secondary: oklch(0.27 0.04 270);
+  --secondary-foreground: oklch(0.98 0.005 270);
+  --muted: oklch(0.24 0.035 270);
+  --muted-foreground: oklch(0.72 0.025 270);
+  --accent: oklch(0.65 0.22 305);
+  --accent-foreground: oklch(0.98 0.005 270);
+  --destructive: oklch(0.65 0.24 22);
+  --destructive-foreground: oklch(0.98 0.005 270);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 12%);
+  --ring: oklch(0.78 0.17 220);
+
+  --nova-cyan: oklch(0.82 0.16 215);
+  --nova-violet: oklch(0.66 0.22 295);
+  --nova-pink: oklch(0.72 0.22 350);
+
+  --sidebar: oklch(0.14 0.03 270);
+  --sidebar-foreground: oklch(0.92 0.01 270);
+  --sidebar-primary: oklch(0.78 0.17 220);
+  --sidebar-primary-foreground: oklch(0.16 0.03 270);
+  --sidebar-accent: oklch(0.22 0.035 270);
+  --sidebar-accent-foreground: oklch(0.98 0.005 270);
+  --sidebar-border: oklch(1 0 0 / 8%);
+  --sidebar-ring: oklch(0.78 0.17 220);
+}
+
+.dark {
+  --background: oklch(0.16 0.03 270);
+  --foreground: oklch(0.98 0.005 270);
+  --card: oklch(0.21 0.035 270 / 70%);
+  --card-foreground: oklch(0.98 0.005 270);
+  --popover: oklch(0.19 0.035 270);
+  --popover-foreground: oklch(0.98 0.005 270);
+  --primary: oklch(0.78 0.17 220);
+  --primary-foreground: oklch(0.16 0.03 270);
+  --secondary: oklch(0.27 0.04 270);
+  --secondary-foreground: oklch(0.98 0.005 270);
+  --muted: oklch(0.24 0.035 270);
+  --muted-foreground: oklch(0.72 0.025 270);
+  --accent: oklch(0.65 0.22 305);
+  --accent-foreground: oklch(0.98 0.005 270);
+  --destructive: oklch(0.65 0.24 22);
+  --destructive-foreground: oklch(0.98 0.005 270);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 12%);
+  --ring: oklch(0.78 0.17 220);
+  --sidebar: oklch(0.14 0.03 270);
+  --sidebar-foreground: oklch(0.92 0.01 270);
+  --sidebar-primary: oklch(0.78 0.17 220);
+  --sidebar-primary-foreground: oklch(0.16 0.03 270);
+  --sidebar-accent: oklch(0.22 0.035 270);
+  --sidebar-accent-foreground: oklch(0.98 0.005 270);
+  --sidebar-border: oklch(1 0 0 / 8%);
+  --sidebar-ring: oklch(0.78 0.17 220);
+}
+
+@layer base {
+  * { border-color: var(--color-border); }
+  html, body { background-color: var(--color-background); color: var(--color-foreground); }
+  body {
+    background-image:
+      radial-gradient(ellipse 80% 50% at 20% 0%, oklch(0.65 0.22 295 / 0.18), transparent 60%),
+      radial-gradient(ellipse 60% 50% at 90% 100%, oklch(0.78 0.17 220 / 0.18), transparent 55%),
+      radial-gradient(ellipse 50% 40% at 50% 50%, oklch(0.72 0.22 350 / 0.06), transparent 60%);
+    background-attachment: fixed;
+  }
+}
+
+@layer utilities {
+  .glass {
+    background: linear-gradient(135deg, oklch(1 0 0 / 0.06), oklch(1 0 0 / 0.02));
+    backdrop-filter: blur(18px) saturate(160%);
+    -webkit-backdrop-filter: blur(18px) saturate(160%);
+    border: 1px solid oklch(1 0 0 / 0.08);
+  }
+  .nova-gradient-text {
+    background: linear-gradient(135deg, var(--nova-cyan), var(--nova-violet) 55%, var(--nova-pink));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .nova-gradient-bg {
+    background: linear-gradient(135deg, var(--nova-cyan), var(--nova-violet) 55%, var(--nova-pink));
+  }
+  .nova-glow {
+    box-shadow:
+      0 0 40px -8px oklch(0.78 0.17 220 / 0.5),
+      0 0 80px -10px oklch(0.66 0.22 295 / 0.35);
+  }
+}
+
+@keyframes orb-pulse {
+  0%, 100% { transform: scale(1); filter: brightness(1); }
+  50% { transform: scale(1.06); filter: brightness(1.15); }
+}
+@keyframes orb-listen {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.18); }
+}
+@keyframes orb-rotate { to { transform: rotate(360deg); } }
+@keyframes nova-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}

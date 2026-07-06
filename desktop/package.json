@@ -1,0 +1,20 @@
+{
+  "name": "nova-desktop-companion",
+  "version": "0.1.0",
+  "description": "Minimal Electron companion app for Nova AI — runs desktop actions with explicit user approval.",
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "package": "electron-packager . NovaCompanion --overwrite --out=out",
+    "package:mac": "electron-packager . NovaCompanion --platform=darwin --arch=x64 --overwrite --out=out",
+    "package:win": "electron-packager . NovaCompanion --platform=win32 --arch=x64 --overwrite --out=out",
+    "package:linux": "electron-packager . NovaCompanion --platform=linux --arch=x64 --overwrite --out=out"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "@electron/packager": "^18.3.0"
+  },
+  "dependencies": {
+    "playwright": "^1.48.0"
+  }
+}

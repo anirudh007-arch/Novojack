@@ -1,0 +1,12 @@
+{
+  "containerName": "nova",
+  "containerPort": 3000,
+  "healthCheck": {
+    "path": "/",
+    "intervalSeconds": 10,
+    "timeoutSeconds": 5,
+    "healthyThreshold": 2,
+    "unhealthyThreshold": 3,
+    "successCodes": "200-499"
+  }
+}
