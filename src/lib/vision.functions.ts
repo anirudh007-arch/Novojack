@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { visionAsk, visionJSON } from "@/lib/ai/gemini.server";
 
 type MediaInput = {
   question: string;
@@ -12,8 +13,6 @@ export const analyzeMedia = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => input as MediaInput)
   .handler(async ({ data }) => {
-    const key = process.env.LOVABLE_API_KEY;
-    if (!key) throw new Error("Missing LOVABLE_API_KEY");
     if (!data.dataUrl?.startsWith("data:")) throw new Error("Invalid file");
 
     const isPdf = data.dataUrl.startsWith("data:application/pdf");
@@ -24,43 +23,10 @@ export const analyzeMedia = createServerFn({ method: "POST" })
       data.question?.trim() ||
       (isPdf ? "Summarize this document and pull out any key facts." : "Describe what's on this screen and explain anything important.");
 
-    const userContent: any[] = [{ type: "text", text: question }];
-    if (isImage) {
-      userContent.push({ type: "image_url", image_url: { url: data.dataUrl } });
-    } else {
-      const base64 = data.dataUrl.split(",")[1] ?? "";
-      userContent.push({
-        type: "file",
-        file: {
-          filename: data.filename || "document.pdf",
-          file_data: `data:application/pdf;base64,${base64}`,
-        },
-      });
-    }
+    const system =
+      "You are Nova, a helpful AI. When given a screenshot, describe what the user is looking at and answer their question clearly. When given a PDF, summarize and answer questions accurately citing the document.";
 
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are Nova, a helpful AI. When given a screenshot, describe what the user is looking at and answer their question clearly. When given a PDF, summarize and answer questions accurately citing the document.",
-          },
-          { role: "user", content: userContent },
-        ],
-      }),
-    });
-    if (!res.ok) {
-      const t = await res.text().catch(() => "");
-      if (res.status === 429) throw new Error("Rate limit reached. Try again shortly.");
-      if (res.status === 402) throw new Error("AI credits exhausted.");
-      throw new Error(`Vision request failed: ${res.status} ${t}`);
-    }
-    const json = await res.json();
-    const reply: string = json.choices?.[0]?.message?.content ?? "";
+    const reply = await visionAsk(system, question, data.dataUrl);
     return { reply };
   });
 
@@ -104,45 +70,10 @@ Return ONLY strict JSON (no markdown):
   "answer": "Direct answer to the user's question, if any"
 }`;
 
-async function callScreenModel(key: string, system: string, userText: string, dataUrl: string) {
-  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "google/gemini-2.5-flash",
-      messages: [
-        { role: "system", content: system },
-        {
-          role: "user",
-          content: [
-            { type: "text", text: userText },
-            { type: "image_url", image_url: { url: dataUrl } },
-          ],
-        },
-      ],
-      response_format: { type: "json_object" },
-    }),
-  });
-  if (!res.ok) {
-    const t = await res.text().catch(() => "");
-    if (res.status === 429) throw new Error("Rate limit reached. Try again shortly.");
-    if (res.status === 402) throw new Error("AI credits exhausted.");
-    throw new Error(`Screen analysis failed: ${res.status} ${t}`);
-  }
-  const json = await res.json();
-  const raw: string = json.choices?.[0]?.message?.content ?? "{}";
-  try { return JSON.parse(raw); } catch {
-    const m = raw.match(/\{[\s\S]*\}/);
-    return m ? JSON.parse(m[0]) : {};
-  }
-}
-
 export const understandScreen = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => input as ScreenInput)
   .handler(async ({ data }): Promise<ScreenUnderstanding> => {
-    const key = process.env.LOVABLE_API_KEY;
-    if (!key) throw new Error("Missing LOVABLE_API_KEY");
     if (!data.dataUrl?.startsWith("data:image/")) throw new Error("Upload a screenshot (image)");
 
     const userText = data.question?.trim()
@@ -150,7 +81,7 @@ export const understandScreen = createServerFn({ method: "POST" })
       : "Analyze this screen.";
 
     const system = SCREEN_SYSTEM(data.languageHint);
-    let parsed: any = await callScreenModel(key, system, userText, data.dataUrl);
+    let parsed: any = await visionJSON(system, userText, data.dataUrl);
 
     // Robustness pass: if OCR came back empty / very thin, or model flagged low quality
     // or non-zero rotation, retry with an aggressive OCR-focused prompt that re-reads
@@ -166,7 +97,7 @@ RETRY MODE: previous OCR was incomplete${rotated ? `, image is rotated ${parsed.
 - Apply mental rotation and upscaling. Use linguistic priors of the detected languages to repair broken characters.
 - Expand visible_text aggressively; never return fewer items than what is clearly present.`;
       try {
-        const retry = await callScreenModel(key, retrySystem, userText, data.dataUrl);
+        const retry = await visionJSON(retrySystem, userText, data.dataUrl);
         // Merge: prefer the richer visible_text, keep best summary/answer
         const mergedText = (retry.visible_text?.length ?? 0) > (parsed.visible_text?.length ?? 0)
           ? retry.visible_text : parsed.visible_text;
@@ -193,4 +124,3 @@ RETRY MODE: previous OCR was incomplete${rotated ? `, image is rotated ${parsed.
       notes: parsed.notes ?? "",
     };
   });
-

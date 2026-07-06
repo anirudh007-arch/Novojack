@@ -3,11 +3,13 @@ import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { generateBriefing } from "@/lib/briefing.functions";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Sparkles, Cloud, Newspaper, Mail, CalendarClock, ListChecks, Lightbulb,
-  RefreshCw, Loader2, Target, Quote, TrendingUp, Mic,
+  RefreshCw, Loader2, Target, Quote, TrendingUp, Mic, Link2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { signInWithGoogle } from "@/lib/google-oauth";
 
 export const Route = createFileRoute("/_authenticated/briefing")({
   head: () => ({ meta: [{ title: "Dashboard — Nova AI" }] }),
@@ -79,7 +81,7 @@ function BriefingPage() {
               <Mic className="size-4" /> Talk to Nova
             </Button>
           </Link>
-          <Button onClick={load} disabled={loading} variant="ghost" size="icon" title="Refresh">
+          <Button onClick={load} disabled={loading} variant="ghost" size="icon" title="Refresh" aria-label="Refresh briefing">
             {loading ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
           </Button>
         </div>
@@ -129,11 +131,35 @@ function BriefingPage() {
       </div>
 
       {loading && !data ? (
-        <div className="glass flex items-center gap-3 rounded-2xl p-8 text-sm text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" /> Nova is preparing your briefing...
+        <div className="grid gap-4 md:grid-cols-2">
+          <Skeleton className="h-28 rounded-2xl md:col-span-2" />
+          <Skeleton className="h-28 rounded-2xl md:col-span-2" />
+          <Skeleton className="h-40 rounded-2xl" />
+          <Skeleton className="h-40 rounded-2xl" />
+          <Skeleton className="h-40 rounded-2xl" />
+          <Skeleton className="h-40 rounded-2xl" />
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
+          {data && !data.connectors?.calendar && !data.connectors?.gmail && (
+            <div className="glass flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary/30 p-4 md:col-span-2">
+              <div className="flex items-center gap-3">
+                <Link2 className="size-5 text-primary" />
+                <div>
+                  <p className="text-sm font-medium">Connect Google for a fuller briefing</p>
+                  <p className="text-xs text-muted-foreground">See your real calendar events and unread email right here.</p>
+                </div>
+              </div>
+              <Button
+                size="sm"
+                className="nova-gradient-bg text-primary-foreground"
+                onClick={() => signInWithGoogle(window.location.href)}
+              >
+                Connect Google
+              </Button>
+            </div>
+          )}
+
           {data?.highlights && data.highlights.length > 0 && (
             <Card icon={<Sparkles className="size-4" />} title="Today's highlights" full>
               <ul className="space-y-1.5 text-sm">

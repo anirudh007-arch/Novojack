@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Sparkles, Mic, BrainCircuit, ListChecks, BellRing, Notebook } from "lucide-react";
+import { Sparkles, Mic, BrainCircuit, BellRing, Notebook, Ear } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/")({
@@ -75,7 +75,49 @@ function Landing() {
           <Feature icon={<BellRing className="size-5" />} title="Reminders" desc="“Remind me to call mom at 7.” Done." />
           <Feature icon={<Notebook className="size-5" />} title="Notes & todos" desc="Capture thoughts and tasks by voice — they land in the right place." />
         </div>
+
+        {/* How it works */}
+        <div className="mx-auto mt-24 max-w-4xl">
+          <p className="mb-8 text-xs uppercase tracking-widest text-muted-foreground">How it works</p>
+          <div className="grid gap-6 text-left sm:grid-cols-3">
+            <Step n={1} icon={<Mic className="size-5" />} title="Speak" desc="Tap the orb or say your wake word — talk to Nova like you would a friend." />
+            <Step n={2} icon={<Ear className="size-5" />} title="Understand" desc="Nova parses intent, routes it to the right skill, and figures out what you need." />
+            <Step n={3} icon={<BrainCircuit className="size-5" />} title="Remember" desc="Facts, tasks and context stick around, so every future conversation gets sharper." />
+          </div>
+        </div>
       </main>
+
+      <footer className="border-t border-border">
+        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-6 py-8 text-xs text-muted-foreground sm:flex-row">
+          <div className="flex items-center gap-2">
+            <Sparkles className="size-4 text-primary" />
+            <span>
+              Nova<span className="nova-gradient-text">AI</span> — your voice-first companion
+            </span>
+          </div>
+          <div className="flex items-center gap-4">
+            <Link to="/auth" className="hover:text-foreground">Sign in</Link>
+            <Link to="/privacy" className="hover:text-foreground">Privacy</Link>
+            <Link to="/terms" className="hover:text-foreground">Terms</Link>
+            <span>© {new Date().getFullYear()} Nova AI</span>
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
+}
+
+function Step({ n, icon, title, desc }: { n: number; icon: React.ReactNode; title: string; desc: string }) {
+  return (
+    <div className="relative">
+      <div className="mb-3 flex items-center gap-2">
+        <div className="flex size-9 items-center justify-center rounded-lg nova-gradient-bg text-primary-foreground">
+          {icon}
+        </div>
+        <span className="text-xs font-medium text-muted-foreground">Step {n}</span>
+      </div>
+      <h3 className="font-medium">{title}</h3>
+      <p className="mt-1 text-sm text-muted-foreground">{desc}</p>
     </div>
   );
 }

@@ -7,7 +7,7 @@ import { useWakeWord } from "@/hooks/use-wake-word";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Mic, MicOff, Send, Volume2, VolumeX, Sparkles, Loader2, Ear, EarOff } from "lucide-react";
+import { Mic, MicOff, Send, Volume2, VolumeX, Sparkles, Ear, EarOff } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -16,7 +16,7 @@ export const Route = createFileRoute("/_authenticated/assistant")({
   component: AssistantPage,
 });
 
-type Msg = { role: "user" | "assistant"; content: string; agent?: string; actions?: { label: string; ok?: boolean }[] };
+type Msg = { role: "user" | "assistant"; content: string; agent?: string; actions?: { label: string; ok?: boolean }[]; at: number };
 
 const SUGGESTIONS = [
   "What's the weather in Tokyo today?",
@@ -48,7 +48,7 @@ function AssistantPage() {
   const [speaking, setSpeaking] = useState(false);
   const [wakeOn, setWakeOn] = useState(false);
   const [language, setLanguage] = useState("en-US");
-  const [voice, setVoice] = useState("alloy");
+  const [voice, setVoice] = useState("Kore");
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -84,7 +84,7 @@ function AssistantPage() {
     if (!clean || busy) return;
     interrupt();
     setInput("");
-    const next = [...messages, { role: "user" as const, content: clean }];
+    const next = [...messages, { role: "user" as const, content: clean, at: Date.now() }];
     setMessages(next);
     setBusy(true);
     try {
@@ -102,6 +102,7 @@ function AssistantPage() {
           content: res.reply,
           agent: (res as any).agent,
           actions: res.actions?.map((a) => ({ label: a.label, ok: a.ok })),
+          at: Date.now(),
         },
       ]);
       if (speakOn) await playReply(res.reply);
@@ -159,10 +160,11 @@ function AssistantPage() {
             size="icon"
             onClick={() => setWakeOn((v) => !v)}
             title={wakeOn ? "Disable wake word" : 'Enable "Hey Nova" wake word'}
+            aria-label={wakeOn ? "Disable wake word" : "Enable wake word"}
           >
             {wakeOn ? <Ear className="size-5 text-primary" /> : <EarOff className="size-5 text-muted-foreground" />}
           </Button>
-          <Button variant="ghost" size="icon" onClick={() => { interrupt(); setSpeakOn((v) => !v); }} title="Toggle voice replies">
+          <Button variant="ghost" size="icon" onClick={() => { interrupt(); setSpeakOn((v) => !v); }} title="Toggle voice replies" aria-label={speakOn ? "Mute voice replies" : "Unmute voice replies"}>
             {speakOn ? <Volume2 className="size-5 text-primary" /> : <VolumeX className="size-5 text-muted-foreground" />}
           </Button>
         </div>
@@ -212,7 +214,7 @@ function AssistantPage() {
               <div key={i} className={cn("flex", m.role === "user" ? "justify-end" : "justify-start")}>
                 <div
                   className={cn(
-                    "max-w-[85%] rounded-2xl px-4 py-2.5 text-sm",
+                    "group max-w-[85%] rounded-2xl px-4 py-2.5 text-sm",
                     m.role === "user"
                       ? "bg-primary text-primary-foreground"
                       : "bg-white/5 border border-border"
@@ -224,6 +226,9 @@ function AssistantPage() {
                     </span>
                   )}
                   <div className="whitespace-pre-wrap">{m.content}</div>
+                  <div className={cn("mt-1 text-[10px] opacity-0 transition-opacity group-hover:opacity-60", m.role === "user" ? "text-primary-foreground" : "text-muted-foreground")}>
+                    {new Date(m.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                  </div>
                   {m.actions && m.actions.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {m.actions.map((a, j) => (
@@ -251,8 +256,10 @@ function AssistantPage() {
             )}
             {busy && (
               <div className="flex justify-start">
-                <div className="rounded-2xl bg-white/5 border border-border px-4 py-2.5 text-sm text-muted-foreground inline-flex items-center gap-2">
-                  <Loader2 className="size-3 animate-spin" /> Nova is thinking...
+                <div className="inline-flex items-center gap-1 rounded-2xl border border-border bg-white/5 px-4 py-3">
+                  <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground [animation-delay:-0.3s]" />
+                  <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground [animation-delay:-0.15s]" />
+                  <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground" />
                 </div>
               </div>
             )}

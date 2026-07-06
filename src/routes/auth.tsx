@@ -1,7 +1,7 @@
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable/index";
+import { signInWithGoogle } from "@/lib/google-oauth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -51,16 +51,12 @@ function AuthPage() {
 
   const signInGoogle = async () => {
     setLoading(true);
-    const result = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin + "/assistant",
-    });
-    if (result.error) {
+    const { error } = await signInWithGoogle(window.location.origin + "/assistant");
+    if (error) {
       setLoading(false);
       toast.error("Google sign-in failed.");
-      return;
     }
-    if (result.redirected) return;
-    window.location.href = "/assistant";
+    // On success the browser is redirected to Google, then back to /assistant.
   };
 
   return (
@@ -128,7 +124,8 @@ function AuthPage() {
         </div>
 
         <p className="mt-6 text-center text-xs text-muted-foreground">
-          By continuing you agree to let Nova store conversations and reminders for you.
+          By continuing you agree to Nova's <Link to="/terms" className="underline underline-offset-2 hover:text-foreground">Terms of Service</Link> and{" "}
+          <Link to="/privacy" className="underline underline-offset-2 hover:text-foreground">Privacy Policy</Link>.
         </p>
       </div>
     </div>

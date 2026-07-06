@@ -1,17 +1,15 @@
 # Nova AI — Deployment Guide
 
-This project is a **TanStack Start v1** app (Vite 7, React 19, SSR-ready) backed by Supabase (Lovable Cloud). Below are deployment instructions for **Vercel**, **Railway**, and **AWS** (via SST / Docker on ECS or Lightsail).
+This project is a **TanStack Start v1** app (Vite 7, React 19, SSR-ready) backed by Supabase. Below are deployment instructions for **Vercel**, **Railway**, and **AWS** (via SST / Docker on ECS or Lightsail).
 
 ---
 
 ## 1. Prerequisites
 
 - Node.js 20+ and [Bun](https://bun.sh) (recommended) or npm
-- A Supabase project (URL + publishable key + service role key)
-- API keys / connectors used by the app:
-  - `LOVABLE_API_KEY` (Lovable AI Gateway — chat, vision, PDF, TTS, STT)
-  - Google OAuth client (for Gmail + Calendar) — managed by Lovable connectors
-  - Optional: any custom news/weather keys (defaults use free Open-Meteo + Google News RSS)
+- A Supabase project (URL + publishable key + service role key), with the **Google** auth provider enabled (Client ID + Secret from Google Cloud Console, with the Gmail + Calendar scopes allowed on the OAuth consent screen)
+- A [Google AI Studio](https://aistudio.google.com/) API key for Gemini (chat, vision, PDF, TTS)
+- Optional: any custom news/weather keys (defaults use free Open-Meteo + Google News RSS)
 
 ### Required environment variables
 
@@ -23,7 +21,9 @@ This project is a **TanStack Start v1** app (Vite 7, React 19, SSR-ready) backed
 | `SUPABASE_URL` | server | Same as above (server-side) |
 | `SUPABASE_PUBLISHABLE_KEY` | server | Same as above (server-side) |
 | `SUPABASE_SERVICE_ROLE_KEY` | server | Service role key (privileged) |
-| `LOVABLE_API_KEY` | server | Lovable AI Gateway key |
+| `GEMINI_API_KEY` | server | Google Gemini API key — chat, vision, TTS |
+| `GOOGLE_OAUTH_CLIENT_ID` | server | Same Google OAuth client registered in Supabase's Google provider — used to refresh Gmail/Calendar access tokens |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | server | Secret for the above |
 
 > Copy `.env.example` → `.env` and fill values for local dev.
 
@@ -144,10 +144,10 @@ Sample JSON files are in the `aws/` directory.
 
 ## 6. Post-deploy checklist
 
-- [ ] Verify `/auth` renders and Google sign-in works (configure OAuth redirect URI to your deployed origin).
-- [ ] Check `/assistant` voice + text chat (requires `LOVABLE_API_KEY`).
+- [ ] Verify `/auth` renders and Google sign-in works (configure the OAuth redirect URI in both Google Cloud Console and Supabase to your deployed origin).
+- [ ] Check `/assistant` voice + text chat (requires `GEMINI_API_KEY`).
 - [ ] Test `/vision` upload (image + PDF).
-- [ ] Confirm Gmail / Calendar connectors return data (re-auth in Settings if needed).
+- [ ] Confirm Gmail / Calendar connectors return data (reconnect Google from Settings if needed — this requires `GOOGLE_OAUTH_CLIENT_ID`/`GOOGLE_OAUTH_CLIENT_SECRET` to be set so tokens can refresh).
 - [ ] Run a Lighthouse pass on the deployed URL.
 
 ---
@@ -158,8 +158,9 @@ Sample JSON files are in the `aws/` directory.
 |--------|-----|
 | `Failed to resolve import` at build | Run `bun install`; ensure all envs are set. |
 | 401 from server functions | `SUPABASE_PUBLISHABLE_KEY` missing OR client not sending bearer (check `attachSupabaseAuth` in `src/start.ts`). |
-| Vision/PDF returns "AI gateway error" | `LOVABLE_API_KEY` not configured on the deploy target. |
-| Gmail/Calendar empty | Re-connect from `/settings`; verify Google OAuth redirect URI matches deployed origin. |
+| Vision/PDF returns an AI error | `GEMINI_API_KEY` not configured on the deploy target. |
+| Gmail/Calendar empty / "Google account not connected" | User needs to sign in with Google (or reconnect from Settings) with the Gmail/Calendar scopes granted; verify the Google OAuth redirect URI matches the deployed origin. |
+| Gmail/Calendar worked once, then stopped | `GOOGLE_OAUTH_CLIENT_ID`/`GOOGLE_OAUTH_CLIENT_SECRET` missing or wrong, so the stored refresh token can't mint new access tokens. |
 | Build OOM on Railway/AWS | Bump container memory to ≥ 1 GB. |
 
 ---

@@ -1,7 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { chatJSON } from "@/lib/ai/gemini.server";
 
-const GW = "https://connector-gateway.lovable.dev";
+const GMAIL = "https://gmail.googleapis.com/gmail/v1";
+const CALENDAR = "https://www.googleapis.com/calendar/v3";
 
 async function getWeather(loc: string) {
   try {
@@ -32,16 +34,23 @@ async function getNews(topic: string) {
   } catch { return []; }
 }
 
-async function getEmails() {
-  const k = process.env.GOOGLE_MAIL_API_KEY;
-  const lov = process.env.LOVABLE_API_KEY!;
-  if (!k) return null;
+async function getGoogleHeaders(userId: string): Promise<{ Authorization: string } | null> {
   try {
-    const headers = { Authorization: `Bearer ${lov}`, "X-Connection-Api-Key": k, "Content-Type": "application/json" };
-    const list = await fetch(`${GW}/google_mail/gmail/v1/users/me/messages?q=is:unread&maxResults=5`, { headers }).then(r => r.json());
+    const { getFreshGoogleAccessToken } = await import("@/integrations/google/token.server");
+    const token = await getFreshGoogleAccessToken(userId);
+    return { Authorization: `Bearer ${token}` };
+  } catch {
+    return null;
+  }
+}
+
+async function getEmails(headers: { Authorization: string } | null) {
+  if (!headers) return null;
+  try {
+    const list = await fetch(`${GMAIL}/users/me/messages?q=is:unread&maxResults=5`, { headers }).then(r => r.json());
     const ids: string[] = (list?.messages || []).map((x: any) => x.id);
     return await Promise.all(ids.map(async (id) => {
-      const m = await fetch(`${GW}/google_mail/gmail/v1/users/me/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject`, { headers }).then(r => r.json());
+      const m = await fetch(`${GMAIL}/users/me/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject`, { headers }).then(r => r.json());
       const h: any[] = m?.payload?.headers || [];
       const get = (n: string) => h.find((x) => x.name?.toLowerCase() === n.toLowerCase())?.value || "";
       return { from: get("From"), subject: get("Subject"), snippet: m?.snippet || "" };
@@ -49,15 +58,12 @@ async function getEmails() {
   } catch { return null; }
 }
 
-async function getEvents() {
-  const k = process.env.GOOGLE_CALENDAR_API_KEY;
-  const lov = process.env.LOVABLE_API_KEY!;
-  if (!k) return null;
+async function getEvents(headers: { Authorization: string } | null) {
+  if (!headers) return null;
   try {
-    const headers = { Authorization: `Bearer ${lov}`, "X-Connection-Api-Key": k, "Content-Type": "application/json" };
     const start = new Date(); start.setHours(0, 0, 0, 0);
     const end = new Date(); end.setHours(23, 59, 59, 999);
-    const r = await fetch(`${GW}/google_calendar/calendar/v3/calendars/primary/events?singleEvents=true&orderBy=startTime&timeMin=${encodeURIComponent(start.toISOString())}&timeMax=${encodeURIComponent(end.toISOString())}`, { headers }).then(r => r.json());
+    const r = await fetch(`${CALENDAR}/calendars/primary/events?singleEvents=true&orderBy=startTime&timeMin=${encodeURIComponent(start.toISOString())}&timeMax=${encodeURIComponent(end.toISOString())}`, { headers }).then(r => r.json());
     return (r?.items || []).map((e: any) => ({
       summary: e.summary || "(no title)",
       start: e.start?.dateTime || e.start?.date,
@@ -71,7 +77,6 @@ export const generateBriefing = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => input as { location?: string; newsTopic?: string })
   .handler(async ({ data, context }) => {
-    if (!process.env.LOVABLE_API_KEY) throw new Error("Missing LOVABLE_API_KEY");
     const { supabase, userId } = context;
 
     const { data: profile } = await supabase
@@ -81,6 +86,7 @@ export const generateBriefing = createServerFn({ method: "POST" })
       .single();
 
     const loc = data.location || profile?.location || "";
+    const googleHeaders = await getGoogleHeaders(userId);
 
     const [todosRes, remindersRes, memRes, weather, news, emails, events, doneTodayRes] = await Promise.all([
       supabase.from("todos").select("title,priority,completed").eq("user_id", userId).eq("completed", false).limit(10),
@@ -88,8 +94,8 @@ export const generateBriefing = createServerFn({ method: "POST" })
       supabase.from("memories").select("fact").eq("user_id", userId).order("created_at", { ascending: false }).limit(20),
       getWeather(loc),
       getNews(data.newsTopic || "today's top stories"),
-      getEmails(),
-      getEvents(),
+      getEmails(googleHeaders),
+      getEvents(googleHeaders),
       supabase.from("todos").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("completed", true)
         .gte("updated_at", new Date(Date.now() - 24 * 3600 * 1000).toISOString()),
     ]);
@@ -97,7 +103,6 @@ export const generateBriefing = createServerFn({ method: "POST" })
     // Productivity score: 0-100 mix of completed-today, open-load penalty, calendar density, unread email penalty.
     const doneToday = (doneTodayRes as any)?.count ?? 0;
     const openTodos = (todosRes.data || []).length;
-    const openReminders = (remindersRes.data || []).length;
     const eventsCount = (events || []).length;
     const emailsCount = (emails || []).length;
     let score = 50 + doneToday * 8 - Math.max(0, openTodos - 3) * 3 - Math.max(0, emailsCount - 3) * 2 + Math.min(eventsCount, 4) * 2;
@@ -129,22 +134,9 @@ export const generateBriefing = createServerFn({ method: "POST" })
   "focus": "<one sentence naming the single most important thing to focus on today>"
 }`;
 
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${process.env.LOVABLE_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "system", content: sys },
-          { role: "user", content: "Generate today's briefing from this data:\n" + JSON.stringify(context_block, null, 2) },
-        ],
-        response_format: { type: "json_object" },
-      }),
-    });
-    if (!res.ok) throw new Error(`Briefing AI failed: ${res.status}`);
-    const json = await res.json();
-    let parsed: any = {};
-    try { parsed = JSON.parse(json.choices?.[0]?.message?.content ?? "{}"); } catch {}
+    const parsed = await chatJSON(sys, [
+      { role: "user", content: "Generate today's briefing from this data:\n" + JSON.stringify(context_block, null, 2) },
+    ]);
 
     return {
       ...parsed,
@@ -160,8 +152,8 @@ export const generateBriefing = createServerFn({ method: "POST" })
         news,
       },
       connectors: {
-        gmail: !!process.env.GOOGLE_MAIL_API_KEY,
-        calendar: !!process.env.GOOGLE_CALENDAR_API_KEY,
+        gmail: !!googleHeaders,
+        calendar: !!googleHeaders,
       },
     };
   });
@@ -170,7 +162,6 @@ export const generateBriefing = createServerFn({ method: "POST" })
 export const summarizeMemories = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    if (!process.env.LOVABLE_API_KEY) throw new Error("Missing LOVABLE_API_KEY");
     const { supabase, userId } = context;
     const { data: rows } = await supabase
       .from("memories").select("id,fact").eq("user_id", userId)
@@ -178,22 +169,7 @@ export const summarizeMemories = createServerFn({ method: "POST" })
     if (!rows || rows.length < 4) return { summary: "Not enough memories to summarize yet.", merged: 0 };
 
     const sys = `Consolidate these user memories into a smaller set of clearer, deduplicated facts. Drop near-duplicates and contradictions; keep the most recent when conflicting. Return strict JSON: {"facts":["fact1","fact2",...]}`;
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${process.env.LOVABLE_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "system", content: sys },
-          { role: "user", content: rows.map((r: any) => "- " + r.fact).join("\n") },
-        ],
-        response_format: { type: "json_object" },
-      }),
-    });
-    if (!res.ok) throw new Error(`Summarize failed: ${res.status}`);
-    const json = await res.json();
-    let parsed: any = {};
-    try { parsed = JSON.parse(json.choices?.[0]?.message?.content ?? "{}"); } catch {}
+    const parsed = await chatJSON(sys, [{ role: "user", content: rows.map((r: any) => "- " + r.fact).join("\n") }]);
     const newFacts: string[] = Array.isArray(parsed.facts) ? parsed.facts.filter((f: any) => typeof f === "string" && f.trim()) : [];
     if (!newFacts.length) return { summary: "Could not summarize.", merged: 0 };
 

@@ -1,17 +1,13 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-const GW = "https://connector-gateway.lovable.dev";
+const GMAIL = "https://gmail.googleapis.com/gmail/v1";
+const CALENDAR = "https://www.googleapis.com/calendar/v3";
 
-function gwHeaders(connectorKey: string) {
-  const lov = process.env.LOVABLE_API_KEY;
-  if (!lov) throw new Error("Missing LOVABLE_API_KEY");
-  if (!connectorKey) throw new Error("Connector not configured");
-  return {
-    Authorization: `Bearer ${lov}`,
-    "X-Connection-Api-Key": connectorKey,
-    "Content-Type": "application/json",
-  };
+async function googleHeaders(userId: string) {
+  const { getFreshGoogleAccessToken } = await import("@/integrations/google/token.server");
+  const token = await getFreshGoogleAccessToken(userId);
+  return { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
 }
 
 // ---------- Weather (Open-Meteo, no key) ----------
@@ -67,18 +63,18 @@ export const getNews = createServerFn({ method: "POST" })
 export const listUnreadEmails = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => input as { max?: number })
-  .handler(async ({ data }) => {
-    const headers = gwHeaders(process.env.GOOGLE_MAIL_API_KEY!);
+  .handler(async ({ data, context }) => {
+    const headers = await googleHeaders(context.userId);
     const max = Math.min(Math.max(data.max || 5, 1), 15);
     const list = await fetch(
-      `${GW}/google_mail/gmail/v1/users/me/messages?q=is:unread&maxResults=${max}`,
+      `${GMAIL}/users/me/messages?q=is:unread&maxResults=${max}`,
       { headers },
     ).then((r) => r.json());
     const ids: string[] = (list?.messages || []).map((m: any) => m.id);
     const items = await Promise.all(
       ids.map(async (id) => {
         const m = await fetch(
-          `${GW}/google_mail/gmail/v1/users/me/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`,
+          `${GMAIL}/users/me/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`,
           { headers },
         ).then((r) => r.json());
         const h: any[] = m?.payload?.headers || [];
@@ -93,11 +89,11 @@ export const listUnreadEmails = createServerFn({ method: "POST" })
 export const listUpcomingEvents = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => input as { max?: number })
-  .handler(async ({ data }) => {
-    const headers = gwHeaders(process.env.GOOGLE_CALENDAR_API_KEY!);
+  .handler(async ({ data, context }) => {
+    const headers = await googleHeaders(context.userId);
     const max = Math.min(Math.max(data.max || 5, 1), 20);
     const now = new Date().toISOString();
-    const url = `${GW}/google_calendar/calendar/v3/calendars/primary/events?maxResults=${max}&orderBy=startTime&singleEvents=true&timeMin=${encodeURIComponent(now)}`;
+    const url = `${CALENDAR}/calendars/primary/events?maxResults=${max}&orderBy=startTime&singleEvents=true&timeMin=${encodeURIComponent(now)}`;
     const r = await fetch(url, { headers }).then((r) => r.json());
     const items = (r?.items || []).map((e: any) => ({
       id: e.id,
@@ -122,8 +118,8 @@ export const createCalendarEvent = createServerFn({ method: "POST" })
         location?: string;
       },
   )
-  .handler(async ({ data }) => {
-    const headers = gwHeaders(process.env.GOOGLE_CALENDAR_API_KEY!);
+  .handler(async ({ data, context }) => {
+    const headers = await googleHeaders(context.userId);
     const start = new Date(data.start);
     const end = data.end ? new Date(data.end) : new Date(start.getTime() + 60 * 60 * 1000);
     const body = {
@@ -133,7 +129,7 @@ export const createCalendarEvent = createServerFn({ method: "POST" })
       start: { dateTime: start.toISOString() },
       end: { dateTime: end.toISOString() },
     };
-    const r = await fetch(`${GW}/google_calendar/calendar/v3/calendars/primary/events`, {
+    const r = await fetch(`${CALENDAR}/calendars/primary/events`, {
       method: "POST",
       headers,
       body: JSON.stringify(body),

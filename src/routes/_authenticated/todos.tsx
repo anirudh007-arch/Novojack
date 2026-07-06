@@ -4,7 +4,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PageHeader } from "@/components/nova/PageHeader";
+import { EmptyState } from "@/components/nova/EmptyState";
 import { ListChecks, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -24,12 +27,14 @@ const PRIORITY_COLOR: Record<string, string> = {
 
 function Page() {
   const [items, setItems] = useState<Todo[]>([]);
+  const [loading, setLoading] = useState(true);
   const [title, setTitle] = useState("");
   const [priority, setPriority] = useState<"low" | "medium" | "high">("medium");
 
   const load = async () => {
     const { data } = await supabase.from("todos").select("*").order("created_at", { ascending: false });
     setItems((data as Todo[]) ?? []);
+    setLoading(false);
   };
   useEffect(() => { load(); }, []);
 
@@ -48,11 +53,14 @@ function Page() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
-      <h1 className="mb-1 flex items-center gap-2 text-2xl font-semibold"><ListChecks className="size-5 text-primary" /> Todos</h1>
-      <p className="mb-6 text-sm text-muted-foreground">Your task list. Say "Add X to my todos."</p>
+      <PageHeader
+        icon={<ListChecks className="size-5 text-primary" />}
+        title="Todos"
+        description='Your task list. Say "Add X to my todos" to Nova.'
+      />
 
       <div className="glass mb-6 flex flex-col gap-2 rounded-2xl p-4 sm:flex-row">
-        <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Add a task..." className="flex-1 bg-white/5" />
+        <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Add a task..." className="flex-1 bg-white/5" onKeyDown={(e) => e.key === "Enter" && add()} />
         <Select value={priority} onValueChange={(v) => setPriority(v as any)}>
           <SelectTrigger className="bg-white/5 sm:w-40"><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -61,21 +69,33 @@ function Page() {
             <SelectItem value="high">High</SelectItem>
           </SelectContent>
         </Select>
-        <Button onClick={add} className="nova-gradient-bg text-primary-foreground"><Plus className="size-4" /></Button>
+        <Button onClick={add} className="nova-gradient-bg text-primary-foreground" aria-label="Add todo"><Plus className="size-4" /></Button>
       </div>
 
-      <div className="space-y-2">
-        {items.length === 0 ? (
-          <p className="text-center text-sm text-muted-foreground">No tasks yet.</p>
-        ) : items.map((t) => (
-          <div key={t.id} className="glass group flex items-center gap-3 rounded-xl px-4 py-3">
-            <Checkbox checked={t.completed} onCheckedChange={() => toggle(t)} />
-            <span className={cn("flex-1", t.completed && "line-through text-muted-foreground")}>{t.title}</span>
-            <span className={cn("text-xs font-medium uppercase", PRIORITY_COLOR[t.priority])}>{t.priority}</span>
-            <Button variant="ghost" size="icon" onClick={() => remove(t.id)} className="opacity-0 group-hover:opacity-100"><Trash2 className="size-4" /></Button>
-          </div>
-        ))}
-      </div>
+      {loading ? (
+        <div className="space-y-2">
+          <Skeleton className="h-12 rounded-xl" />
+          <Skeleton className="h-12 rounded-xl" />
+          <Skeleton className="h-12 rounded-xl" />
+        </div>
+      ) : items.length === 0 ? (
+        <EmptyState icon={<ListChecks className="size-8" />} title="No tasks yet" description="Add one above, or ask Nova to add it for you." />
+      ) : (
+        <div className="space-y-2">
+          {items.map((t, i) => (
+            <div
+              key={t.id}
+              className="glass group flex animate-in fade-in slide-in-from-bottom-1 items-center gap-3 rounded-xl px-4 py-3 duration-300"
+              style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}
+            >
+              <Checkbox checked={t.completed} onCheckedChange={() => toggle(t)} />
+              <span className={cn("flex-1", t.completed && "line-through text-muted-foreground")}>{t.title}</span>
+              <span className={cn("text-xs font-medium uppercase", PRIORITY_COLOR[t.priority])}>{t.priority}</span>
+              <Button variant="ghost" size="icon" onClick={() => remove(t.id)} className="opacity-0 group-hover:opacity-100" aria-label="Delete todo"><Trash2 className="size-4" /></Button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

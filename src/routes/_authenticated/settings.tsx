@@ -1,11 +1,16 @@
-import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
+import { getGoogleConnectionStatus } from "@/integrations/google/connections.functions";
+import { signInWithGoogle } from "@/lib/google-oauth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Settings as SettingsIcon, LogOut, Sparkles } from "lucide-react";
+import { PageHeader } from "@/components/nova/PageHeader";
+import { Settings as SettingsIcon, LogOut, Sparkles, Link2, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/settings")({
@@ -13,14 +18,16 @@ export const Route = createFileRoute("/_authenticated/settings")({
   component: Page,
 });
 
+// Gemini's prebuilt TTS voice names (curated subset — Nova speaks direct
+// Gemini TTS, not the old OpenAI-shaped gateway voices).
 const VOICES = [
-  { id: "alloy", label: "Alloy — balanced" },
-  { id: "ash", label: "Ash — warm" },
-  { id: "coral", label: "Coral — bright" },
-  { id: "echo", label: "Echo — calm" },
-  { id: "sage", label: "Sage — thoughtful" },
-  { id: "shimmer", label: "Shimmer — soft" },
-  { id: "verse", label: "Verse — expressive" },
+  { id: "Kore", label: "Kore — balanced" },
+  { id: "Puck", label: "Puck — upbeat" },
+  { id: "Charon", label: "Charon — calm" },
+  { id: "Fenrir", label: "Fenrir — confident" },
+  { id: "Aoede", label: "Aoede — breezy" },
+  { id: "Leda", label: "Leda — youthful" },
+  { id: "Orus", label: "Orus — firm" },
 ];
 
 const LANGS = [
@@ -59,7 +66,7 @@ const ACCENTS = [
 function Page() {
   const router = useRouter();
   const [displayName, setDisplayName] = useState("");
-  const [voice, setVoice] = useState("alloy");
+  const [voice, setVoice] = useState("Kore");
   const [language, setLanguage] = useState("en-US");
   const [personality, setPersonality] = useState("friendly");
   const [responseLength, setResponseLength] = useState("balanced");
@@ -69,6 +76,8 @@ function Page() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [email, setEmail] = useState("");
+  const [googleConnected, setGoogleConnected] = useState<boolean | null>(null);
+  const getStatus = useServerFn(getGoogleConnectionStatus);
 
   useEffect(() => {
     (async () => {
@@ -77,7 +86,7 @@ function Page() {
       const { data } = await supabase.from("profiles").select("*").eq("id", u.user!.id).single();
       if (data) {
         setDisplayName(data.display_name ?? "");
-        setVoice(data.preferred_voice ?? "alloy");
+        setVoice(data.preferred_voice ?? "Kore");
         setLanguage(data.preferred_language ?? "en-US");
         setPersonality((data as any).personality ?? "friendly");
         setResponseLength((data as any).response_length ?? "balanced");
@@ -86,7 +95,9 @@ function Page() {
         setAccentColor((data as any).accent_color ?? "violet");
       }
       setLoading(false);
+      getStatus({}).then((r) => setGoogleConnected(r.connected)).catch(() => setGoogleConnected(false));
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const save = async () => {
@@ -112,12 +123,25 @@ function Page() {
     router.navigate({ to: "/" });
   };
 
-  if (loading) return <div className="p-8 text-sm text-muted-foreground">Loading...</div>;
+  const connectGoogle = () => signInWithGoogle(window.location.href);
+
+  if (loading) {
+    return (
+      <div className="mx-auto max-w-3xl space-y-4 px-4 py-8">
+        <Skeleton className="h-10 w-48" />
+        <Skeleton className="h-40 rounded-2xl" />
+        <Skeleton className="h-40 rounded-2xl" />
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
-      <h1 className="mb-1 flex items-center gap-2 text-2xl font-semibold"><SettingsIcon className="size-5 text-primary" /> Settings</h1>
-      <p className="mb-6 text-sm text-muted-foreground">Personalize Nova — voice, personality, and how it talks with you.</p>
+      <PageHeader
+        icon={<SettingsIcon className="size-5 text-primary" />}
+        title="Settings"
+        description="Personalize Nova — voice, personality, connections, and how it talks with you."
+      />
 
       <Section title="Profile">
         <div>
@@ -130,6 +154,25 @@ function Page() {
         <Field label="City for weather & briefing">
           <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g. Mumbai" className="bg-white/5" />
         </Field>
+      </Section>
+
+      <Section title="Connections" icon={<Link2 className="size-4 text-primary" />}>
+        <div className="flex items-center justify-between gap-3 rounded-xl bg-white/5 px-4 py-3">
+          <div className="flex items-center gap-3">
+            <div className={`flex size-9 items-center justify-center rounded-lg ${googleConnected ? "bg-emerald-500/20 text-emerald-300" : "bg-white/10 text-muted-foreground"}`}>
+              {googleConnected ? <CheckCircle2 className="size-5" /> : <Link2 className="size-5" />}
+            </div>
+            <div>
+              <p className="text-sm font-medium">Google (Gmail + Calendar)</p>
+              <p className="text-xs text-muted-foreground">
+                {googleConnected === null ? "Checking..." : googleConnected ? "Connected — Nova can read unread mail and events." : "Not connected"}
+              </p>
+            </div>
+          </div>
+          <Button size="sm" variant={googleConnected ? "outline" : "default"} className={googleConnected ? "" : "nova-gradient-bg text-primary-foreground"} onClick={connectGoogle}>
+            {googleConnected ? "Reconnect" : "Connect"}
+          </Button>
+        </div>
       </Section>
 
       <Section title="Personality" icon={<Sparkles className="size-4 text-primary" />}>
@@ -197,7 +240,12 @@ function Page() {
           <p className="font-medium">Sign out</p>
           <p className="text-xs text-muted-foreground">End your current session.</p>
         </div>
-        <Button variant="outline" onClick={signOut}><LogOut className="size-4" /> Sign out</Button>
+        <Button variant="outline" onClick={signOut} aria-label="Sign out"><LogOut className="size-4" /> Sign out</Button>
+      </div>
+
+      <div className="mt-6 flex justify-center gap-4 text-xs text-muted-foreground">
+        <Link to="/privacy" className="hover:text-foreground">Privacy Policy</Link>
+        <Link to="/terms" className="hover:text-foreground">Terms of Service</Link>
       </div>
     </div>
   );

@@ -1,10 +1,12 @@
 import { createFileRoute, Link, Outlet, redirect, useLocation, useRouter } from "@tanstack/react-router";
+import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import {
-  Sparkles, Mic, Notebook, BellRing, ListChecks, BrainCircuit, Eye, Settings as SettingsIcon, LogOut, LayoutDashboard,
+  Sparkles, Mic, Notebook, BellRing, ListChecks, BrainCircuit, Eye, Settings as SettingsIcon, LogOut, LayoutDashboard, Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { CommandPalette } from "@/components/nova/CommandPalette";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated")({
@@ -28,10 +30,19 @@ const navItems = [
   { to: "/settings", label: "Settings", icon: SettingsIcon },
 ] as const;
 
+function initialsFor(email?: string | null) {
+  if (!email) return "?";
+  const local = email.split("@")[0];
+  const parts = local.split(/[._-]/).filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return local.slice(0, 2).toUpperCase();
+}
+
 function AuthedLayout() {
   const { user } = useAuth();
   const location = useLocation();
   const router = useRouter();
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   const signOut = async () => {
     await supabase.auth.signOut();
@@ -41,12 +52,22 @@ function AuthedLayout() {
   return (
     <div className="flex min-h-screen">
       <aside className="hidden w-60 shrink-0 flex-col border-r border-border bg-sidebar/60 backdrop-blur-xl p-4 md:flex">
-        <Link to="/assistant" className="mb-8 flex items-center gap-2 px-2">
+        <Link to="/assistant" className="mb-6 flex items-center gap-2 px-2">
           <Sparkles className="size-5 text-primary" />
           <span className="text-lg font-semibold tracking-tight">
             Nova<span className="nova-gradient-text">AI</span>
           </span>
         </Link>
+
+        <button
+          onClick={() => setPaletteOpen(true)}
+          className="mb-6 flex items-center gap-2 rounded-lg border border-border bg-white/5 px-3 py-2 text-left text-xs text-muted-foreground transition hover:bg-white/10"
+        >
+          <Search className="size-3.5" />
+          <span className="flex-1">Search...</span>
+          <kbd className="rounded border border-border bg-white/5 px-1.5 py-0.5 font-mono text-[10px]">⌘K</kbd>
+        </button>
+
         <nav className="flex flex-col gap-1">
           {navItems.map(({ to, label, icon: Icon }) => {
             const active = location.pathname === to;
@@ -55,21 +76,27 @@ function AuthedLayout() {
                 key={to}
                 to={to}
                 className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition",
+                  "group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all duration-200",
                   active
-                    ? "nova-gradient-bg text-primary-foreground"
-                    : "text-sidebar-foreground hover:bg-sidebar-accent"
+                    ? "nova-gradient-bg text-primary-foreground shadow-lg shadow-primary/20"
+                    : "text-sidebar-foreground hover:translate-x-0.5 hover:bg-sidebar-accent",
                 )}
               >
-                <Icon className="size-4" />
+                <Icon className={cn("size-4 transition-transform", !active && "group-hover:scale-110")} />
                 {label}
               </Link>
             );
           })}
         </nav>
+
         <div className="mt-auto border-t border-border pt-4">
-          <div className="mb-2 px-2 text-xs text-muted-foreground truncate">{user?.email}</div>
-          <Button variant="ghost" className="w-full justify-start" onClick={signOut}>
+          <div className="mb-3 flex items-center gap-2 px-2">
+            <div className="flex size-7 shrink-0 items-center justify-center rounded-full nova-gradient-bg text-[11px] font-semibold text-primary-foreground">
+              {initialsFor(user?.email)}
+            </div>
+            <div className="min-w-0 truncate text-xs text-muted-foreground">{user?.email}</div>
+          </div>
+          <Button variant="ghost" className="w-full justify-start" onClick={signOut} aria-label="Sign out">
             <LogOut className="size-4" /> Sign out
           </Button>
         </div>
@@ -80,8 +107,16 @@ function AuthedLayout() {
         {navItems.map(({ to, label, icon: Icon }) => {
           const active = location.pathname === to;
           return (
-            <Link key={to} to={to} className={cn("flex flex-col items-center gap-0.5 px-3 py-1 text-[10px]", active ? "text-primary" : "text-muted-foreground")}>
-              <Icon className="size-5" />
+            <Link
+              key={to}
+              to={to}
+              className={cn(
+                "relative flex flex-col items-center gap-0.5 rounded-lg px-3 py-1 text-[10px] transition-colors",
+                active ? "text-primary" : "text-muted-foreground",
+              )}
+            >
+              {active && <span className="absolute -top-2 h-0.5 w-5 rounded-full nova-gradient-bg" />}
+              <Icon className={cn("size-5 transition-transform", active && "scale-110")} />
               {label}
             </Link>
           );
@@ -91,6 +126,8 @@ function AuthedLayout() {
       <main className="flex-1 pb-20 md:pb-0">
         <Outlet />
       </main>
+
+      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
     </div>
   );
 }

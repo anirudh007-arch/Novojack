@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Eye, FileText, Upload, Loader2, X, ScanSearch, Monitor } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { PageHeader } from "@/components/nova/PageHeader";
 
 export const Route = createFileRoute("/_authenticated/vision")({
   head: () => ({ meta: [{ title: "Vision & Screen Understanding — Nova AI" }] }),
@@ -70,12 +71,11 @@ function VisionPage() {
 
   return (
     <div className="mx-auto flex min-h-screen max-w-3xl flex-col px-4 py-6">
-      <header className="mb-4">
-        <h1 className="text-2xl font-semibold tracking-tight">Vision & Screen Understanding</h1>
-        <p className="text-sm text-muted-foreground">
-          Drop in a screenshot and Nova reads the text, explains UI elements, and suggests next steps.
-        </p>
-      </header>
+      <PageHeader
+        icon={<Eye className="size-5 text-primary" />}
+        title="Vision & Screen Understanding"
+        description="Drop in a screenshot and Nova reads the text, explains UI elements, and suggests next steps."
+      />
 
       <div className="mb-4 inline-flex w-fit rounded-xl bg-white/5 p-1 text-sm">
         <button
@@ -107,7 +107,7 @@ function VisionPage() {
         </button>
       ) : (
         <div className="glass relative rounded-2xl p-4">
-          <button onClick={clear} className="absolute right-3 top-3 rounded-full bg-white/10 p-1.5 hover:bg-white/20"><X className="size-4" /></button>
+          <button onClick={clear} aria-label="Remove file" className="absolute right-3 top-3 rounded-full bg-white/10 p-1.5 hover:bg-white/20"><X className="size-4" /></button>
           <div className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
             {isPdf ? <FileText className="size-4" /> : <Eye className="size-4" />}
             <span className="truncate">{file.name}</span>

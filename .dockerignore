@@ -2,7 +2,6 @@ node_modules
 .output
 .tanstack
 .workspace
-.lovable
 .git
 .env
 .env.local
