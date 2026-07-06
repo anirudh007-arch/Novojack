@@ -68,11 +68,7 @@ bash scripts/deploy-vercel.sh
 
 ### Configuration
 
-`vercel.json` (already committed) sets the build command and pins the Node runtime. Add env vars in the Vercel dashboard under **Settings → Environment Variables** (or via `vercel env add`).
-
-**Build command:** `bun run build`
-**Output directory:** `.output/public`
-**Install command:** `bun install`
+Let Vercel's **TanStack Start** framework preset handle the build and output — don't override it with a custom build command or output directory. Those only produce static client assets (`.output/public`), not the actual SSR server (`.output/server/index.mjs`) that runs your server functions (chat, vision, briefing); overriding the framework preset with a static build silently breaks all of those in production. `vercel.json` only pins the install command and region — add env vars in the Vercel dashboard under **Settings → Environment Variables** (or via `vercel env add`).
 
 ---
 
