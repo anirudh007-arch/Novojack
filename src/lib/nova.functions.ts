@@ -4,6 +4,7 @@ import { chatJSON, synthesizeSpeech, type ChatMessage } from "@/lib/ai/gemini.se
 
 const GMAIL = "https://gmail.googleapis.com/gmail/v1";
 const CALENDAR = "https://www.googleapis.com/calendar/v3";
+const TASKS = "https://tasks.googleapis.com/tasks/v1";
 
 const SYSTEM_PROMPT = `You are Nova, a warm, witty, helpful voice-first personal AI operating system.
 Be concise (1-3 sentences for voice). Be proactive. Speak naturally like a friend.
@@ -35,6 +36,8 @@ Information actions — when the user asks for live info, INCLUDE one of these a
 - {"type":"fetch_news","topic":"AI"}
 - {"type":"fetch_unread_emails","max":5}
 - {"type":"fetch_upcoming_events","max":5}
+- {"type":"fetch_google_tasks","max":10}
+- {"type":"fetch_github_notifications","max":10}
 
 Calendar action (executed):
 - {"type":"create_calendar_event","summary":"Dentist","start":"2026-06-22T14:00:00Z","end":"2026-06-22T15:00:00Z","location":"...","description":"..."}
@@ -113,6 +116,34 @@ async function fetchTool(action: any, userId: string): Promise<{ label: string; 
     }));
     return { label: `Upcoming events (${events.length})`, data: { events } };
   }
+  if (action.type === "fetch_google_tasks") {
+    const { getFreshGoogleAccessToken } = await import("@/integrations/google/token.server");
+    let token: string;
+    try { token = await getFreshGoogleAccessToken(userId); }
+    catch { return { label: "Google Tasks not connected", data: { error: "Connect Google in Settings" } }; }
+    const headers = { Authorization: `Bearer ${token}` };
+    const max = Math.min(action.max || 10, 20);
+    const r = await fetch(`${TASKS}/lists/@default/tasks?showCompleted=false&maxResults=${max}`, { headers }).then((r) => r.json());
+    const tasks = (r?.items || []).map((t: any) => ({ title: t.title || "(untitled)", notes: t.notes || "", due: t.due || null }));
+    return { label: `Google Tasks (${tasks.length})`, data: { tasks } };
+  }
+  if (action.type === "fetch_github_notifications") {
+    const { getGithubAccessToken } = await import("@/integrations/github/token.server");
+    let token: string;
+    try { token = await getGithubAccessToken(userId); }
+    catch { return { label: "GitHub not connected", data: { error: "Connect GitHub in Settings" } }; }
+    const max = Math.min(action.max || 10, 20);
+    const list = await fetch(`https://api.github.com/notifications?per_page=${max}`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" },
+    }).then((r) => r.json());
+    const notifications = (Array.isArray(list) ? list : []).map((n: any) => ({
+      title: n.subject?.title || "(untitled)",
+      type: n.subject?.type || "",
+      reason: n.reason,
+      repo: n.repository?.full_name || "",
+    }));
+    return { label: `GitHub notifications (${notifications.length})`, data: { notifications } };
+  }
   return null;
 }
 
@@ -142,7 +173,10 @@ export const chatWithNova = createServerFn({ method: "POST" })
 
     // Run fetch tools and do a second AI pass to compose the real reply
     const fetchResults: { label: string; data: any }[] = [];
-    const fetchTypes = new Set(["fetch_weather", "fetch_news", "fetch_unread_emails", "fetch_upcoming_events"]);
+    const fetchTypes = new Set([
+      "fetch_weather", "fetch_news", "fetch_unread_emails", "fetch_upcoming_events",
+      "fetch_google_tasks", "fetch_github_notifications",
+    ]);
     const fetches = actions.filter((a: any) => fetchTypes.has(a?.type));
     if (fetches.length) {
       for (const a of fetches) {

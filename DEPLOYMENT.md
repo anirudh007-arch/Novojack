@@ -7,8 +7,9 @@ This project is a **TanStack Start v1** app (Vite 7, React 19, SSR-ready) backed
 ## 1. Prerequisites
 
 - Node.js 20+ and [Bun](https://bun.sh) (recommended) or npm
-- A Supabase project (URL + publishable key + service role key), with the **Google** auth provider enabled (Client ID + Secret from Google Cloud Console, with the Gmail + Calendar scopes allowed on the OAuth consent screen)
+- A Supabase project (URL + publishable key + service role key), with the **Google** auth provider enabled (Client ID + Secret from Google Cloud Console, with the Gmail + Calendar + Tasks scopes allowed on the OAuth consent screen)
 - A [Google AI Studio](https://aistudio.google.com/) API key for Gemini (chat, vision, PDF, TTS)
+- Optional: a [GitHub OAuth App](https://github.com/settings/developers) if you want the GitHub connection (notifications) — free, no billing required
 - Optional: any custom news/weather keys (defaults use free Open-Meteo + Google News RSS)
 
 ### Required environment variables
@@ -22,8 +23,10 @@ This project is a **TanStack Start v1** app (Vite 7, React 19, SSR-ready) backed
 | `SUPABASE_PUBLISHABLE_KEY` | server | Same as above (server-side) |
 | `SUPABASE_SERVICE_ROLE_KEY` | server | Service role key (privileged) |
 | `GEMINI_API_KEY` | server | Google Gemini API key — chat, vision, TTS |
-| `GOOGLE_OAUTH_CLIENT_ID` | server | Same Google OAuth client registered in Supabase's Google provider — used to refresh Gmail/Calendar access tokens |
+| `GOOGLE_OAUTH_CLIENT_ID` | server | Same Google OAuth client registered in Supabase's Google provider — used to refresh Gmail/Calendar/Tasks access tokens |
 | `GOOGLE_OAUTH_CLIENT_SECRET` | server | Secret for the above |
+| `VITE_GITHUB_OAUTH_CLIENT_ID` | client + server | GitHub OAuth App client ID (public) — used to build the authorize URL and, server-side, to exchange the code |
+| `GITHUB_OAUTH_CLIENT_SECRET` | server | Secret for the above |
 
 > Copy `.env.example` → `.env` and fill values for local dev.
 
@@ -143,7 +146,8 @@ Sample JSON files are in the `aws/` directory.
 - [ ] Verify `/auth` renders and Google sign-in works (configure the OAuth redirect URI in both Google Cloud Console and Supabase to your deployed origin).
 - [ ] Check `/assistant` voice + text chat (requires `GEMINI_API_KEY`).
 - [ ] Test `/vision` upload (image + PDF).
-- [ ] Confirm Gmail / Calendar connectors return data (reconnect Google from Settings if needed — this requires `GOOGLE_OAUTH_CLIENT_ID`/`GOOGLE_OAUTH_CLIENT_SECRET` to be set so tokens can refresh).
+- [ ] Confirm Gmail / Calendar / Tasks connectors return data (reconnect Google from Settings if needed — this requires `GOOGLE_OAUTH_CLIENT_ID`/`GOOGLE_OAUTH_CLIENT_SECRET` to be set so tokens can refresh).
+- [ ] If using the GitHub connection, verify its OAuth App's callback URL is set to `<deployed origin>/settings` and `VITE_GITHUB_OAUTH_CLIENT_ID`/`GITHUB_OAUTH_CLIENT_SECRET` are set.
 - [ ] Run a Lighthouse pass on the deployed URL.
 
 ---
