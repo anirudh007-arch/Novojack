@@ -37,10 +37,11 @@ export const exchangeGithubCode = createServerFn({ method: "POST" })
     const login: string | null = userJson?.login ?? null;
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    await supabaseAdmin.from("github_connections").upsert(
+    const { error: dbError } = await supabaseAdmin.from("github_connections").upsert(
       { user_id: context.userId, access_token: accessToken, scope, github_login: login } as any,
       { onConflict: "user_id" },
     );
+    if (dbError) throw new Error(`Failed to save GitHub connection: ${dbError.message}`);
     return { ok: true, login };
   });
 
