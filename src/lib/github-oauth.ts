@@ -12,7 +12,10 @@ export function connectGithub(redirectTo: string) {
   if (!clientId) {
     throw new Error("GitHub connection isn't configured (missing VITE_GITHUB_OAUTH_CLIENT_ID).");
   }
-  const state = crypto.randomUUID();
+  // Prefixed so the shared /settings callback can tell GitHub's and
+  // Spotify's redirects apart — both land on the same route with the same
+  // ?code=&state= shape.
+  const state = `github:${crypto.randomUUID()}`;
   sessionStorage.setItem(STATE_KEY, state);
   const url = new URL("https://github.com/login/oauth/authorize");
   url.searchParams.set("client_id", clientId);
