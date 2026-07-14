@@ -3,6 +3,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const GMAIL = "https://gmail.googleapis.com/gmail/v1";
 const CALENDAR = "https://www.googleapis.com/calendar/v3";
+const TASKS = "https://tasks.googleapis.com/tasks/v1";
 
 async function googleHeaders(userId: string) {
   const { getFreshGoogleAccessToken } = await import("@/integrations/google/token.server");
@@ -104,6 +105,103 @@ export const listUpcomingEvents = createServerFn({ method: "POST" })
       htmlLink: e.htmlLink,
     }));
     return { events: items };
+  });
+
+// ---------- Google Tasks: list + create ----------
+export const listGoogleTasks = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => input as { max?: number })
+  .handler(async ({ data, context }) => {
+    const headers = await googleHeaders(context.userId);
+    const max = Math.min(Math.max(data.max || 10, 1), 30);
+    const r = await fetch(
+      `${TASKS}/lists/@default/tasks?showCompleted=false&maxResults=${max}`,
+      { headers },
+    ).then((r) => r.json());
+    const items = (r?.items || []).map((t: any) => ({
+      id: t.id,
+      title: t.title || "(untitled)",
+      notes: t.notes || "",
+      due: t.due || null,
+      status: t.status,
+    }));
+    return { tasks: items };
+  });
+
+export const createGoogleTask = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => input as { title: string; notes?: string; due?: string })
+  .handler(async ({ data, context }) => {
+    const headers = await googleHeaders(context.userId);
+    const body = { title: data.title, notes: data.notes, due: data.due };
+    const r = await fetch(`${TASKS}/lists/@default/tasks`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) {
+      const t = await r.text().catch(() => "");
+      throw new Error(`Google Tasks error: ${r.status} ${t}`);
+    }
+    const t = await r.json();
+    return { id: t.id, title: t.title };
+  });
+
+// ---------- Spotify: search + playback control ----------
+export const playSpotifyTrack = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => input as { song: string; artist: string })
+  .handler(async ({ data, context }) => {
+    const { getFreshSpotifyAccessToken } = await import("@/integrations/spotify/token.server");
+    const token = await getFreshSpotifyAccessToken(context.userId);
+    const headers = { Authorization: `Bearer ${token}` };
+
+    const q = `track:${data.song} artist:${data.artist}`;
+    const search = await fetch(
+      `https://api.spotify.com/v1/search?q=${encodeURIComponent(q)}&type=track&limit=1`,
+      { headers },
+    ).then((r) => r.json());
+    const track = search?.tracks?.items?.[0];
+    if (!track) throw new Error(`Couldn't find "${data.song}" by ${data.artist} on Spotify`);
+
+    const devicesJson = await fetch("https://api.spotify.com/v1/me/player/devices", { headers }).then((r) => r.json());
+    const devices: any[] = devicesJson?.devices || [];
+    const device = devices.find((d) => d.is_active) || devices[0];
+    if (!device) throw new Error("No active Spotify device — open Spotify on your phone or computer first");
+
+    const playRes = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${device.id}`, {
+      method: "PUT",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({ uris: [track.uri] }),
+    });
+    if (!playRes.ok) {
+      const t = await playRes.text().catch(() => "");
+      const hint = playRes.status === 403 ? " (Spotify Premium is required for playback control)" : "";
+      throw new Error(`Spotify playback error: ${playRes.status}${hint} ${t}`);
+    }
+    return { track: track.name, artist: track.artists?.[0]?.name, device: device.name };
+  });
+
+// ---------- GitHub: list notifications ----------
+export const listGithubNotifications = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => input as { max?: number })
+  .handler(async ({ data, context }) => {
+    const { getGithubAccessToken } = await import("@/integrations/github/token.server");
+    const token = await getGithubAccessToken(context.userId);
+    const max = Math.min(Math.max(data.max || 10, 1), 30);
+    const list = await fetch(`https://api.github.com/notifications?per_page=${max}`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" },
+    }).then((r) => r.json());
+    const items = (Array.isArray(list) ? list : []).map((n: any) => ({
+      id: n.id,
+      title: n.subject?.title || "(untitled)",
+      type: n.subject?.type || "",
+      reason: n.reason,
+      repo: n.repository?.full_name || "",
+      updatedAt: n.updated_at,
+    }));
+    return { notifications: items };
   });
 
 export const createCalendarEvent = createServerFn({ method: "POST" })

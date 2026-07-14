@@ -114,13 +114,6 @@
 @layer base {
   * { border-color: var(--color-border); }
   html, body { background-color: var(--color-background); color: var(--color-foreground); }
-  body {
-    background-image:
-      radial-gradient(ellipse 80% 50% at 20% 0%, oklch(0.65 0.22 295 / 0.18), transparent 60%),
-      radial-gradient(ellipse 60% 50% at 90% 100%, oklch(0.78 0.17 220 / 0.18), transparent 55%),
-      radial-gradient(ellipse 50% 40% at 50% 50%, oklch(0.72 0.22 350 / 0.06), transparent 60%);
-    background-attachment: fixed;
-  }
 }
 
 @layer utilities {
@@ -144,6 +137,79 @@
       0 0 40px -8px oklch(0.78 0.17 220 / 0.5),
       0 0 80px -10px oklch(0.66 0.22 295 / 0.35);
   }
+}
+
+.nova-wallpaper {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+.nova-wallpaper-blob {
+  position: absolute;
+  width: 70vmax;
+  height: 70vmax;
+  border-radius: 9999px;
+  filter: blur(90px);
+  opacity: 0.45;
+  will-change: transform;
+}
+.nova-wallpaper-blob-1 {
+  top: -20vmax;
+  left: -15vmax;
+  background: radial-gradient(circle, var(--nova-violet), transparent 70%);
+  animation: nova-wallpaper-drift-1 32s ease-in-out infinite;
+}
+.nova-wallpaper-blob-2 {
+  top: -10vmax;
+  right: -20vmax;
+  background: radial-gradient(circle, var(--nova-cyan), transparent 70%);
+  animation: nova-wallpaper-drift-2 38s ease-in-out infinite;
+}
+.nova-wallpaper-blob-3 {
+  bottom: -25vmax;
+  left: 10vmax;
+  width: 55vmax;
+  height: 55vmax;
+  background: radial-gradient(circle, var(--nova-pink), transparent 70%);
+  opacity: 0.3;
+  animation: nova-wallpaper-drift-3 44s ease-in-out infinite;
+}
+.nova-wallpaper-blob-4 {
+  bottom: -15vmax;
+  right: -10vmax;
+  width: 50vmax;
+  height: 50vmax;
+  background: radial-gradient(circle, var(--nova-violet), transparent 70%);
+  opacity: 0.25;
+  animation: nova-wallpaper-drift-4 50s ease-in-out infinite;
+}
+.nova-wallpaper-grain {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(oklch(1 0 0 / 0.035) 1px, transparent 1px);
+  background-size: 3px 3px;
+  opacity: 0.4;
+}
+@keyframes nova-wallpaper-drift-1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(12vmax, 8vmax) scale(1.12); }
+}
+@keyframes nova-wallpaper-drift-2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-10vmax, 10vmax) scale(1.08); }
+}
+@keyframes nova-wallpaper-drift-3 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(8vmax, -10vmax) scale(1.15); }
+}
+@keyframes nova-wallpaper-drift-4 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-8vmax, -6vmax) scale(1.1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nova-wallpaper-blob { animation: none; }
 }
 
 @keyframes orb-pulse {

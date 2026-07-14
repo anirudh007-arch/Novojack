@@ -11,6 +11,7 @@ import { type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { Toaster } from "@/components/ui/sonner";
+import { LiveWallpaper } from "@/components/nova/LiveWallpaper";
 
 function NotFoundComponent() {
   return (
@@ -99,6 +100,7 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   return (
     <QueryClientProvider client={queryClient}>
+      <LiveWallpaper />
       <Outlet />
       <Toaster richColors position="top-center" />
     </QueryClientProvider>

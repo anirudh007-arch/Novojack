@@ -38,6 +38,33 @@ export type Database = {
         }
         Relationships: []
       }
+      github_connections: {
+        Row: {
+          access_token: string
+          created_at: string
+          github_login: string | null
+          scope: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_token: string
+          created_at?: string
+          github_login?: string | null
+          scope?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_token?: string
+          created_at?: string
+          github_login?: string | null
+          scope?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       google_connections: {
         Row: {
           access_token: string
@@ -63,6 +90,39 @@ export type Database = {
           expires_at?: string
           refresh_token?: string | null
           scope?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      spotify_connections: {
+        Row: {
+          access_token: string
+          created_at: string
+          expires_at: string
+          refresh_token: string
+          scope: string | null
+          spotify_display_name: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_token: string
+          created_at?: string
+          expires_at: string
+          refresh_token: string
+          scope?: string | null
+          spotify_display_name?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_token?: string
+          created_at?: string
+          expires_at?: string
+          refresh_token?: string
+          scope?: string | null
+          spotify_display_name?: string | null
           updated_at?: string
           user_id?: string
         }
