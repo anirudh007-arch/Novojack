@@ -1,13 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { chatWithNova, speakText } from "@/lib/nova.functions";
+import { chatWithNova } from "@/lib/nova.functions";
 import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
+import { useSpeechQueue } from "@/hooks/use-speech-queue";
 import { useWakeWord } from "@/hooks/use-wake-word";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, Volume2, VolumeX, Sparkles, Ear, EarOff } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Send, Volume2, VolumeX, Sparkles, Ear, EarOff, Radio, Languages } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { NovaOrb } from "@/components/nova/NovaOrb";
@@ -30,6 +32,17 @@ const SUGGESTIONS = [
   "Remember my partner's birthday is in October",
 ];
 
+// Speech-recognition locales, Indian languages first (target audience).
+const LANGS = [
+  { id: "en-IN", label: "English (India)" },
+  { id: "en-US", label: "English (US)" },
+  { id: "hi-IN", label: "हिन्दी" },
+  { id: "ta-IN", label: "தமிழ்" },
+  { id: "te-IN", label: "తెలుగు" },
+  { id: "kn-IN", label: "ಕನ್ನಡ" },
+  { id: "ml-IN", label: "മലയാളം" },
+];
+
 const AGENT_COLORS: Record<string, string> = {
   research: "bg-blue-500/20 text-blue-300",
   productivity: "bg-emerald-500/20 text-emerald-300",
@@ -46,16 +59,25 @@ function AssistantPage() {
   const [busy, setBusy] = useState(false);
   const [speakOn, setSpeakOn] = useState(true);
   const [convId, setConvId] = useState<string | null>(null);
-  const [speaking, setSpeaking] = useState(false);
   const [wakeOn, setWakeOn] = useState(false);
-  const [language, setLanguage] = useState("en-US");
+  const [convoMode, setConvoMode] = useState(false);
+  const [language, setLanguage] = useState("en-IN");
   const [voice, setVoice] = useState("Kore");
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   const chat = useServerFn(chatWithNova);
-  const tts = useServerFn(speakText);
   const { supported, listening, interim, start, stop } = useSpeechRecognition(language);
+  const speech = useSpeechQueue(voice);
+
+  // Refs mirror state so the conversation loop (fired from timers / speech
+  // callbacks) always reads current values instead of stale closures.
+  const busyRef = useRef(false);
+  const convoRef = useRef(false);
+  const listeningRef = useRef(false);
+  const speakOnRef = useRef(true);
+  const sendRef = useRef<(t: string) => void>(() => {});
+  useEffect(() => { listeningRef.current = listening; }, [listening]);
+  useEffect(() => { speakOnRef.current = speakOn; }, [speakOn]);
 
   // Load profile prefs
   useEffect(() => {
@@ -72,22 +94,31 @@ function AssistantPage() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, busy, interim]);
 
-  const interrupt = () => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-    }
-    setSpeaking(false);
-  };
+  // Open the mic for the user's turn; in conversation mode, re-arm after a
+  // silent timeout so the exchange keeps flowing hands-free.
+  const armListening = useCallback(() => {
+    if (!supported || listeningRef.current || busyRef.current) return;
+    start(
+      (final) => sendRef.current(final),
+      (captured) => {
+        if (convoRef.current && !captured && !busyRef.current) {
+          window.setTimeout(() => {
+            if (convoRef.current && !busyRef.current && !listeningRef.current) armListening();
+          }, 500);
+        }
+      },
+    );
+  }, [supported, start]);
 
   const send = async (text: string) => {
     const clean = text.trim();
-    if (!clean || busy) return;
-    interrupt();
+    if (!clean || busyRef.current) return;
+    speech.stop();
     setInput("");
     const next = [...messages, { role: "user" as const, content: clean, at: Date.now() }];
     setMessages(next);
     setBusy(true);
+    busyRef.current = true;
     try {
       const res = await chat({
         data: {
@@ -106,33 +137,23 @@ function AssistantPage() {
           at: Date.now(),
         },
       ]);
-      if (speakOn) await playReply(res.reply);
+      if (speakOnRef.current) await speech.speak(res.reply);
     } catch (e: any) {
       toast.error(e?.message ?? "Something went wrong");
     } finally {
       setBusy(false);
+      busyRef.current = false;
+      if (convoRef.current) armListening();
     }
   };
+  sendRef.current = send;
 
-  const playReply = async (text: string) => {
-    try {
-      setSpeaking(true);
-      const { audio } = await tts({ data: { text, voice } });
-      if (audioRef.current) {
-        audioRef.current.src = audio;
-        await audioRef.current.play().catch(() => {});
-      }
-    } catch {
-      // ignore TTS failure
-    }
-  };
-
-  // Wake-word hook (continuous listening). Disabled when push-to-talk is active.
+  // Wake-word hook (continuous listening). Off during push-to-talk or convo mode.
   useWakeWord({
     language,
-    enabled: wakeOn && !listening,
+    enabled: wakeOn && !listening && !convoMode,
     onCommand: (cmd) => send(cmd),
-    onInterrupt: () => interrupt(),
+    onInterrupt: () => speech.stop(),
   });
 
   const handleMic = () => {
@@ -140,22 +161,65 @@ function AssistantPage() {
       toast.error("Voice input isn't supported in this browser. Try Chrome or Edge.");
       return;
     }
-    if (listening) stop();
-    else start((finalText) => send(finalText));
+    if (listening) { stop(); return; }
+    speech.stop(); // barge-in: cut Nova off if she's speaking
+    start((final) => sendRef.current(final));
   };
+
+  const toggleConvo = () => {
+    const nv = !convoMode;
+    setConvoMode(nv);
+    convoRef.current = nv;
+    if (nv) {
+      setWakeOn(false);
+      speech.stop();
+      armListening();
+    } else {
+      stop();
+      speech.stop();
+    }
+  };
+
+  const changeLanguage = (lang: string) => {
+    setLanguage(lang);
+    supabase.auth.getUser().then(({ data: u }) => {
+      if (u.user) supabase.from("profiles").update({ preferred_language: lang } as any).eq("id", u.user.id);
+    });
+  };
+
+  const subtitle = convoMode
+    ? listening ? "Listening…" : speech.speaking ? "Nova is speaking — tap the orb to cut in" : "Conversation mode — just talk, no tapping"
+    : wakeOn ? 'Listening for "Hey Nova"…'
+    : "Tap the orb and speak — or type below.";
 
   return (
     <div className="mx-auto flex h-screen max-w-3xl flex-col px-4 py-6">
-      <header className="mb-4 flex items-center justify-between">
-        <div>
+      <header className="mb-4 flex items-center justify-between gap-2">
+        <div className="min-w-0">
           <h1 className="text-2xl font-semibold tracking-tight">
             Hey, I'm <span className="nova-shimmer-text">Nova</span>
           </h1>
-          <p className="text-sm text-muted-foreground">
-            {wakeOn ? "Listening for \"Hey Nova\"…" : "Tap the orb and speak — or type below."}
-          </p>
+          <p className="truncate text-sm text-muted-foreground">{subtitle}</p>
         </div>
         <div className="flex items-center gap-1">
+          <Select value={language} onValueChange={changeLanguage}>
+            <SelectTrigger className="h-9 w-auto gap-1.5 border-0 bg-white/5 px-2.5 text-xs" aria-label="Recognition language">
+              <Languages className="size-4 text-primary" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {LANGS.map((l) => <SelectItem key={l.id} value={l.id}>{l.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleConvo}
+            title={convoMode ? "End conversation mode" : "Start hands-free conversation"}
+            aria-label={convoMode ? "End conversation mode" : "Start conversation mode"}
+          >
+            <Radio className={cn("size-5", convoMode ? "text-primary" : "text-muted-foreground")} />
+          </Button>
           <Button
             variant="ghost"
             size="icon"
@@ -165,7 +229,7 @@ function AssistantPage() {
           >
             {wakeOn ? <Ear className="size-5 text-primary" /> : <EarOff className="size-5 text-muted-foreground" />}
           </Button>
-          <Button variant="ghost" size="icon" onClick={() => { interrupt(); setSpeakOn((v) => !v); }} title="Toggle voice replies" aria-label={speakOn ? "Mute voice replies" : "Unmute voice replies"}>
+          <Button variant="ghost" size="icon" onClick={() => { speech.stop(); setSpeakOn((v) => !v); }} title="Toggle voice replies" aria-label={speakOn ? "Mute voice replies" : "Unmute voice replies"}>
             {speakOn ? <Volume2 className="size-5 text-primary" /> : <VolumeX className="size-5 text-muted-foreground" />}
           </Button>
         </div>
@@ -174,7 +238,7 @@ function AssistantPage() {
       {/* Orb */}
       <div className="mb-4">
         <NovaOrb
-          state={speaking ? "speaking" : listening || wakeOn ? "listening" : "idle"}
+          state={speech.speaking ? "speaking" : listening || convoMode || wakeOn ? "listening" : "idle"}
           listening={listening}
           onClick={handleMic}
         />
@@ -273,8 +337,6 @@ function AssistantPage() {
           <Send className="size-4" />
         </Button>
       </form>
-
-      <audio ref={audioRef} onEnded={() => setSpeaking(false)} onPause={() => setSpeaking(false)} hidden />
     </div>
   );
 }
