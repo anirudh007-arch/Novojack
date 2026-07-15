@@ -107,7 +107,7 @@ function Page() {
           {filtered.map((m, i) => (
             <div
               key={m.id}
-              className="glass group flex animate-in fade-in slide-in-from-bottom-1 items-center gap-3 rounded-xl px-4 py-3 duration-300"
+              className="glass nova-lift group flex animate-in fade-in slide-in-from-bottom-1 items-center gap-3 rounded-xl px-4 py-3 duration-300"
               style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}
             >
               <span className="flex-1 text-sm">{m.fact}</span>
