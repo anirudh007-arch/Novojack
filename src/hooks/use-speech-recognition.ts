@@ -17,7 +17,10 @@ export function useSpeechRecognition(language: string = "en-US") {
   }, []);
 
   const start = useCallback(
-    (onFinal?: (text: string) => void) => {
+    // onFinal fires only when speech was captured; onEnd fires whenever the
+    // recognizer stops (with the captured text, empty if silence) so callers
+    // can re-arm listening for hands-free conversation.
+    (onFinal?: (text: string) => void, onEnd?: (text: string) => void) => {
       const W = window as any;
       const SRClass = W.SpeechRecognition || W.webkitSpeechRecognition;
       if (!SRClass) return;
@@ -40,7 +43,9 @@ export function useSpeechRecognition(language: string = "en-US") {
       rec.onend = () => {
         setListening(false);
         setInterim("");
-        if (finalText.trim() && onFinal) onFinal(finalText.trim());
+        const captured = finalText.trim();
+        if (captured && onFinal) onFinal(captured);
+        onEnd?.(captured);
       };
       recRef.current = rec;
       setTranscript("");
