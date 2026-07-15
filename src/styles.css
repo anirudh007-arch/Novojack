@@ -137,6 +137,46 @@
       0 0 40px -8px oklch(0.78 0.17 220 / 0.5),
       0 0 80px -10px oklch(0.66 0.22 295 / 0.35);
   }
+  /* Animated sheen sweeping across gradient text — for hero wordmarks. */
+  .nova-shimmer-text {
+    background: linear-gradient(110deg, var(--nova-cyan), var(--nova-violet) 40%, var(--nova-pink) 55%, var(--nova-cyan) 80%);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: nova-shimmer 6s linear infinite;
+  }
+  /* Entrance helpers — one-shot on mount (both = keep final frame). */
+  .nova-in-up { animation: nova-in-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .nova-bubble-user { animation: nova-in-right 0.42s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .nova-bubble-assistant { animation: nova-in-left 0.42s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  /* Interactive lift for chips / cards. */
+  .nova-lift { transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease; }
+  .nova-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px -10px var(--nova-violet);
+  }
+}
+
+@keyframes nova-shimmer { to { background-position: 200% center; } }
+@keyframes nova-in-up {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes nova-in-right {
+  from { opacity: 0; transform: translateY(8px) translateX(14px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) translateX(0) scale(1); }
+}
+@keyframes nova-in-left {
+  from { opacity: 0; transform: translateY(8px) translateX(-14px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) translateX(0) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nova-shimmer-text,
+  .nova-in-up,
+  .nova-bubble-user,
+  .nova-bubble-assistant { animation: none; }
+  .nova-lift:hover { transform: none; }
 }
 
 .nova-wallpaper {
