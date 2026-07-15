@@ -14,7 +14,7 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
+    <header className="nova-in-up mb-6 flex flex-wrap items-start justify-between gap-4">
       <div>
         {kicker && (
           <div className="mb-1 flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground">

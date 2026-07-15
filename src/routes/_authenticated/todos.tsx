@@ -85,7 +85,7 @@ function Page() {
           {items.map((t, i) => (
             <div
               key={t.id}
-              className="glass group flex animate-in fade-in slide-in-from-bottom-1 items-center gap-3 rounded-xl px-4 py-3 duration-300"
+              className="glass nova-lift group flex animate-in fade-in slide-in-from-bottom-1 items-center gap-3 rounded-xl px-4 py-3 duration-300"
               style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}
             >
               <Checkbox checked={t.completed} onCheckedChange={() => toggle(t)} />

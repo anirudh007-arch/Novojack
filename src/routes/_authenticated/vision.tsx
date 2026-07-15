@@ -161,11 +161,11 @@ function VisionPage() {
 
 
       {reply && (
-        <div className="glass mt-6 whitespace-pre-wrap rounded-2xl border border-border p-4 text-sm leading-relaxed">{reply}</div>
+        <div className="glass nova-in-up mt-6 whitespace-pre-wrap rounded-2xl border border-border p-4 text-sm leading-relaxed">{reply}</div>
       )}
 
       {screen && (
-        <div className="mt-6 space-y-4">
+        <div className="nova-in-up mt-6 space-y-4">
           {(screen.detected_languages?.length || screen.orientation_degrees || screen.image_quality || screen.notes) && (
             <section className="glass flex flex-wrap items-center gap-2 rounded-2xl p-3 text-xs">
               {screen.detected_languages?.map((l) => (

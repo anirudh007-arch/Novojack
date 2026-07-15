@@ -64,14 +64,14 @@ function BriefingPage() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
-      <header className="mb-6 flex items-start justify-between gap-4">
+      <header className="nova-in-up mb-6 flex items-start justify-between gap-4">
         <div>
           <div className="mb-1 flex items-center gap-2">
-            <Sparkles className="size-5 text-primary" />
+            <Sparkles className="size-5 text-primary" style={{ animation: "nova-float 3s ease-in-out infinite" }} />
             <span className="text-xs uppercase tracking-widest text-muted-foreground">Your dashboard</span>
           </div>
           <h1 className="text-4xl font-semibold tracking-tight">
-            {data?.greeting || "Good day"}
+            <span className="nova-shimmer-text">{data?.greeting || "Good day"}</span>
           </h1>
           {data?.summary && <p className="mt-2 max-w-2xl text-sm text-muted-foreground">{data.summary}</p>}
         </div>
@@ -89,7 +89,7 @@ function BriefingPage() {
 
       {/* Top row: focus + productivity score + quote */}
       <div className="mb-4 grid gap-4 md:grid-cols-3">
-        <div className="glass rounded-2xl p-5 md:col-span-2">
+        <div className="glass nova-lift nova-in-up rounded-2xl p-5 md:col-span-2">
           <div className="mb-2 flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground">
             <Target className="size-3.5 text-primary" /> Today's focus
           </div>
@@ -97,7 +97,7 @@ function BriefingPage() {
             {data?.focus || (loading ? "…" : "Set a focus by adding tasks or memories Nova can learn from.")}
           </p>
         </div>
-        <div className="glass rounded-2xl p-5">
+        <div className="glass nova-lift nova-in-up rounded-2xl p-5">
           <div className="mb-2 flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground">
             <TrendingUp className="size-3.5 text-primary" /> Productivity
           </div>
@@ -245,7 +245,7 @@ function BriefingPage() {
 
 function Card({ icon, title, children, full }: { icon: React.ReactNode; title: string; children: React.ReactNode; full?: boolean }) {
   return (
-    <div className={`glass rounded-2xl p-4 transition hover:bg-white/[0.04] ${full ? "md:col-span-2" : ""}`}>
+    <div className={`glass nova-lift nova-in-up rounded-2xl p-4 hover:bg-white/[0.04] ${full ? "md:col-span-2" : ""}`}>
       <div className="mb-2 flex items-center gap-2 text-sm font-medium">
         <span className="text-primary">{icon}</span>
         {title}

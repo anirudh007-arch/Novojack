@@ -209,7 +209,7 @@ function Page() {
       </Section>
 
       <Section title="Connections" icon={<Link2 className="size-4 text-primary" />}>
-        <div className="flex items-center justify-between gap-3 rounded-xl bg-white/5 px-4 py-3">
+        <div className="nova-lift flex items-center justify-between gap-3 rounded-xl bg-white/5 px-4 py-3">
           <div className="flex items-center gap-3">
             <div className={`flex size-9 items-center justify-center rounded-lg ${googleConnected ? "bg-emerald-500/20 text-emerald-300" : "bg-white/10 text-muted-foreground"}`}>
               {googleConnected ? <CheckCircle2 className="size-5" /> : <Link2 className="size-5" />}
@@ -232,7 +232,7 @@ function Page() {
           </Button>
         </div>
 
-        <div className="flex items-center justify-between gap-3 rounded-xl bg-white/5 px-4 py-3">
+        <div className="nova-lift flex items-center justify-between gap-3 rounded-xl bg-white/5 px-4 py-3">
           <div className="flex items-center gap-3">
             <div className={`flex size-9 items-center justify-center rounded-lg ${githubConnected ? "bg-emerald-500/20 text-emerald-300" : "bg-white/10 text-muted-foreground"}`}>
               {githubConnected ? <CheckCircle2 className="size-5" /> : <Github className="size-5" />}

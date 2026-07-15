@@ -76,7 +76,7 @@ function NotesPage() {
           {notes.map((n, i) => (
             <div
               key={n.id}
-              className="glass group flex animate-in fade-in slide-in-from-bottom-1 items-start justify-between gap-3 rounded-xl p-4 duration-300"
+              className="glass nova-lift group flex animate-in fade-in slide-in-from-bottom-1 items-start justify-between gap-3 rounded-xl p-4 duration-300"
               style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}
             >
               <div className="min-w-0">
