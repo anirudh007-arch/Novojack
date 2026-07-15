@@ -149,7 +149,7 @@ function AssistantPage() {
       <header className="mb-4 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
-            Hey, I'm <span className="nova-gradient-text">Nova</span>
+            Hey, I'm <span className="nova-shimmer-text">Nova</span>
           </h1>
           <p className="text-sm text-muted-foreground">
             {wakeOn ? "Listening for \"Hey Nova\"…" : "Tap the orb and speak — or type below."}
@@ -184,14 +184,15 @@ function AssistantPage() {
       <div ref={scrollRef} className="glass mb-4 flex-1 overflow-y-auto rounded-2xl p-4">
         {messages.length === 0 && !busy && !interim ? (
           <div className="flex h-full flex-col items-center justify-center text-center">
-            <Sparkles className="mb-3 size-8 text-primary" />
-            <p className="mb-4 text-sm text-muted-foreground">Try saying...</p>
+            <Sparkles className="mb-3 size-8 text-primary" style={{ animation: "nova-float 3s ease-in-out infinite" }} />
+            <p className="nova-in-up mb-4 text-sm text-muted-foreground">Try saying...</p>
             <div className="flex flex-wrap justify-center gap-2">
-              {SUGGESTIONS.map((s) => (
+              {SUGGESTIONS.map((s, i) => (
                 <button
                   key={s}
                   onClick={() => send(s)}
-                  className="rounded-full border border-border bg-white/5 px-3 py-1.5 text-xs hover:bg-white/10"
+                  className="nova-in-up nova-lift rounded-full border border-border bg-white/5 px-3 py-1.5 text-xs hover:border-primary/40 hover:bg-white/10"
+                  style={{ animationDelay: `${0.05 * i + 0.1}s` }}
                 >
                   {s}
                 </button>
@@ -204,10 +205,10 @@ function AssistantPage() {
               <div key={i} className={cn("flex", m.role === "user" ? "justify-end" : "justify-start")}>
                 <div
                   className={cn(
-                    "group max-w-[85%] rounded-2xl px-4 py-2.5 text-sm",
+                    "group max-w-[85%] rounded-2xl px-4 py-2.5 text-sm shadow-lg shadow-black/20",
                     m.role === "user"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-white/5 border border-border"
+                      ? "nova-bubble-user bg-primary text-primary-foreground"
+                      : "nova-bubble-assistant border border-border bg-white/5"
                   )}
                 >
                   {m.role === "assistant" && m.agent && (
@@ -241,7 +242,7 @@ function AssistantPage() {
             ))}
             {interim && (
               <div className="flex justify-end">
-                <div className="max-w-[85%] rounded-2xl bg-primary/30 px-4 py-2.5 text-sm italic">{interim}</div>
+                <div className="max-w-[85%] rounded-2xl bg-primary/30 px-4 py-2.5 text-sm italic" style={{ animation: "nova-orb-breathe 1.6s ease-in-out infinite" }}>{interim}</div>
               </div>
             )}
             {busy && (
@@ -265,10 +266,10 @@ function AssistantPage() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Type a message..."
-          className="bg-white/5"
+          className="bg-white/5 transition-shadow duration-300 focus-visible:shadow-[0_0_0_3px_oklch(0.66_0.22_295_/_0.25)]"
           disabled={busy}
         />
-        <Button type="submit" disabled={busy || !input.trim()} className="nova-gradient-bg text-primary-foreground">
+        <Button type="submit" disabled={busy || !input.trim()} className="nova-lift nova-gradient-bg text-primary-foreground">
           <Send className="size-4" />
         </Button>
       </form>
