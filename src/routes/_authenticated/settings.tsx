@@ -6,19 +6,15 @@ import { getGoogleConnectionStatus } from "@/integrations/google/connections.fun
 import { signInWithGoogle } from "@/lib/google-oauth";
 import { getGithubConnectionStatus, exchangeGithubCode } from "@/integrations/github/connections.functions";
 import { connectGithub, consumeGithubOAuthState } from "@/lib/github-oauth";
-import { getSpotifyConnectionStatus, exchangeSpotifyCode } from "@/integrations/spotify/connections.functions";
-import { connectSpotify, consumeSpotifyOAuthState } from "@/lib/spotify-oauth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PageHeader } from "@/components/nova/PageHeader";
-import { Settings as SettingsIcon, LogOut, Sparkles, Link2, CheckCircle2, Github, Music2 } from "lucide-react";
+import { Settings as SettingsIcon, LogOut, Sparkles, Link2, CheckCircle2, Github } from "lucide-react";
 import { toast } from "sonner";
 
-// Both GitHub and Spotify redirect back here with ?code=&state= — the
-// `state` value itself is prefixed ("github:"/"spotify:") to tell them apart.
 const OAUTH_REDIRECT_URI = typeof window !== "undefined" ? `${window.location.origin}/settings` : "";
 
 export const Route = createFileRoute("/_authenticated/settings")({
@@ -89,14 +85,9 @@ function Page() {
   const [githubConnected, setGithubConnected] = useState<boolean | null>(null);
   const [githubLogin, setGithubLogin] = useState<string | null>(null);
   const [githubBusy, setGithubBusy] = useState(false);
-  const [spotifyConnected, setSpotifyConnected] = useState<boolean | null>(null);
-  const [spotifyDisplayName, setSpotifyDisplayName] = useState<string | null>(null);
-  const [spotifyBusy, setSpotifyBusy] = useState(false);
   const getGoogleStatus = useServerFn(getGoogleConnectionStatus);
   const getGithubStatus = useServerFn(getGithubConnectionStatus);
   const runExchangeGithubCode = useServerFn(exchangeGithubCode);
-  const getSpotifyStatus = useServerFn(getSpotifyConnectionStatus);
-  const runExchangeSpotifyCode = useServerFn(exchangeSpotifyCode);
 
   useEffect(() => {
     (async () => {
@@ -116,19 +107,17 @@ function Page() {
       setLoading(false);
       getGoogleStatus({}).then((r) => { setGoogleConnected(r.connected); setGoogleScope(r.scope); }).catch(() => setGoogleConnected(false));
 
-      // Finish a GitHub/Spotify OAuth redirect if we just came back from
-      // their consent screen with ?code=&state= — the state's prefix tells
-      // us which provider it belongs to. Otherwise just refresh both statuses.
+      // Finish a GitHub OAuth redirect if we just came back from github.com
+      // with ?code=&state= — otherwise just refresh the connection status.
       const params = new URLSearchParams(window.location.search);
       const code = params.get("code");
       const state = params.get("state");
       const oauthError = params.get("error");
-      const provider = state?.split(":")[0];
       if (code || oauthError) window.history.replaceState(null, "", window.location.pathname);
 
       if (oauthError) {
         toast.error("Connection was cancelled.");
-      } else if (code && provider === "github") {
+      } else if (code) {
         if (!consumeGithubOAuthState(state)) {
           toast.error("GitHub connection failed (state mismatch). Please try again.");
           setGithubConnected(false);
@@ -146,27 +135,8 @@ function Page() {
             setGithubBusy(false);
           }
         }
-      } else if (code && provider === "spotify") {
-        if (!consumeSpotifyOAuthState(state)) {
-          toast.error("Spotify connection failed (state mismatch). Please try again.");
-          setSpotifyConnected(false);
-        } else {
-          setSpotifyBusy(true);
-          try {
-            const r = await runExchangeSpotifyCode({ data: { code, redirectUri: OAUTH_REDIRECT_URI } });
-            setSpotifyConnected(true);
-            setSpotifyDisplayName(r.displayName);
-            toast.success(r.displayName ? `Connected Spotify as ${r.displayName}` : "Spotify connected");
-          } catch (e) {
-            toast.error((e as Error).message || "Spotify connection failed.");
-            setSpotifyConnected(false);
-          } finally {
-            setSpotifyBusy(false);
-          }
-        }
       } else {
         getGithubStatus({}).then((r) => { setGithubConnected(r.connected); setGithubLogin(r.login); }).catch(() => setGithubConnected(false));
-        getSpotifyStatus({}).then((r) => { setSpotifyConnected(r.connected); setSpotifyDisplayName(r.displayName); }).catch(() => setSpotifyConnected(false));
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -200,14 +170,6 @@ function Page() {
   const connectGitHub = () => {
     try {
       connectGithub(OAUTH_REDIRECT_URI);
-    } catch (e) {
-      toast.error((e as Error).message);
-    }
-  };
-
-  const connectSpotifyAccount = () => {
-    try {
-      connectSpotify(OAUTH_REDIRECT_URI);
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -290,29 +252,6 @@ function Page() {
           </div>
           <Button size="sm" variant={githubConnected ? "outline" : "default"} className={githubConnected ? "" : "nova-gradient-bg text-primary-foreground"} onClick={connectGitHub} disabled={githubBusy}>
             {githubConnected ? "Reconnect" : "Connect"}
-          </Button>
-        </div>
-
-        <div className="flex items-center justify-between gap-3 rounded-xl bg-white/5 px-4 py-3">
-          <div className="flex items-center gap-3">
-            <div className={`flex size-9 items-center justify-center rounded-lg ${spotifyConnected ? "bg-emerald-500/20 text-emerald-300" : "bg-white/10 text-muted-foreground"}`}>
-              {spotifyConnected ? <CheckCircle2 className="size-5" /> : <Music2 className="size-5" />}
-            </div>
-            <div>
-              <p className="text-sm font-medium">Spotify</p>
-              <p className="text-xs text-muted-foreground">
-                {spotifyBusy
-                  ? "Connecting..."
-                  : spotifyConnected === null
-                    ? "Checking..."
-                    : spotifyConnected
-                      ? `Connected${spotifyDisplayName ? ` as ${spotifyDisplayName}` : ""} — say "play <song> by <artist>". Requires Spotify Premium + an open device.`
-                      : "Not connected"}
-              </p>
-            </div>
-          </div>
-          <Button size="sm" variant={spotifyConnected ? "outline" : "default"} className={spotifyConnected ? "" : "nova-gradient-bg text-primary-foreground"} onClick={connectSpotifyAccount} disabled={spotifyBusy}>
-            {spotifyConnected ? "Reconnect" : "Connect"}
           </Button>
         </div>
       </Section>

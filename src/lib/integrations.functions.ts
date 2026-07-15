@@ -147,41 +147,6 @@ export const createGoogleTask = createServerFn({ method: "POST" })
     return { id: t.id, title: t.title };
   });
 
-// ---------- Spotify: search + playback control ----------
-export const playSpotifyTrack = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => input as { song: string; artist: string })
-  .handler(async ({ data, context }) => {
-    const { getFreshSpotifyAccessToken } = await import("@/integrations/spotify/token.server");
-    const token = await getFreshSpotifyAccessToken(context.userId);
-    const headers = { Authorization: `Bearer ${token}` };
-
-    const q = `track:${data.song} artist:${data.artist}`;
-    const search = await fetch(
-      `https://api.spotify.com/v1/search?q=${encodeURIComponent(q)}&type=track&limit=1`,
-      { headers },
-    ).then((r) => r.json());
-    const track = search?.tracks?.items?.[0];
-    if (!track) throw new Error(`Couldn't find "${data.song}" by ${data.artist} on Spotify`);
-
-    const devicesJson = await fetch("https://api.spotify.com/v1/me/player/devices", { headers }).then((r) => r.json());
-    const devices: any[] = devicesJson?.devices || [];
-    const device = devices.find((d) => d.is_active) || devices[0];
-    if (!device) throw new Error("No active Spotify device — open Spotify on your phone or computer first");
-
-    const playRes = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${device.id}`, {
-      method: "PUT",
-      headers: { ...headers, "Content-Type": "application/json" },
-      body: JSON.stringify({ uris: [track.uri] }),
-    });
-    if (!playRes.ok) {
-      const t = await playRes.text().catch(() => "");
-      const hint = playRes.status === 403 ? " (Spotify Premium is required for playback control)" : "";
-      throw new Error(`Spotify playback error: ${playRes.status}${hint} ${t}`);
-    }
-    return { track: track.name, artist: track.artists?.[0]?.name, device: device.name };
-  });
-
 // ---------- GitHub: list notifications ----------
 export const listGithubNotifications = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])

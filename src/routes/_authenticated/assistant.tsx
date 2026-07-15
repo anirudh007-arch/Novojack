@@ -7,9 +7,10 @@ import { useWakeWord } from "@/hooks/use-wake-word";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Mic, MicOff, Send, Volume2, VolumeX, Sparkles, Ear, EarOff } from "lucide-react";
+import { Send, Volume2, VolumeX, Sparkles, Ear, EarOff } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { NovaOrb } from "@/components/nova/NovaOrb";
 
 export const Route = createFileRoute("/_authenticated/assistant")({
   head: () => ({ meta: [{ title: "Assistant — Nova AI" }] }),
@@ -171,23 +172,12 @@ function AssistantPage() {
       </header>
 
       {/* Orb */}
-      <div className="relative mx-auto mb-4 flex size-44 items-center justify-center">
-        <div
-          className="absolute inset-0 rounded-full nova-gradient-bg blur-2xl opacity-50"
-          style={{ animation: `${listening || wakeOn ? "orb-listen 1s ease-in-out infinite" : speaking ? "orb-pulse 1.2s ease-in-out infinite" : "orb-pulse 4s ease-in-out infinite"}` }}
-        />
-        <button
+      <div className="mb-4">
+        <NovaOrb
+          state={speaking ? "speaking" : listening || wakeOn ? "listening" : "idle"}
+          listening={listening}
           onClick={handleMic}
-          className={cn(
-            "relative size-32 rounded-full nova-gradient-bg shadow-2xl transition-transform",
-            "flex items-center justify-center",
-            listening && "scale-110",
-          )}
-          style={{ animation: listening ? "orb-listen 1s ease-in-out infinite" : undefined }}
-          aria-label={listening ? "Stop listening" : "Start listening"}
-        >
-          {listening ? <MicOff className="size-10 text-white" /> : <Mic className="size-10 text-white" />}
-        </button>
+        />
       </div>
 
       {/* Conversation */}

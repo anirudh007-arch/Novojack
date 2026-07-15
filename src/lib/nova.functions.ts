@@ -45,9 +45,6 @@ Calendar action (executed):
 Communication action (drafts a Gmail draft for user review — never sends):
 - {"type":"draft_email","to":"alice@example.com","subject":"Re: project","body":"..."}
 
-Music action (executed — plays on the user's active Spotify device, e.g. "play Blinding Lights by The Weeknd"):
-- {"type":"play_music","song":"Blinding Lights","artist":"The Weeknd"}
-
 Desktop-only actions (these need the Nova desktop companion app, which is coming soon. Still emit them when the user asks — the UI will show a clear "requires desktop app" notice. Always require user approval, never claim they ran):
 - {"type":"open_app","name":"Slack"}
 - {"type":"close_app","name":"Slack"}
@@ -243,45 +240,6 @@ export const chatWithNova = createServerFn({ method: "POST" })
             else executed.push({ type: a.type, ok: false, label: `Calendar error: ${r.status}` });
           } catch {
             executed.push({ type: a.type, ok: false, label: "Calendar not connected" });
-          }
-        } else if (a.type === "play_music") {
-          const { getFreshSpotifyAccessToken } = await import("@/integrations/spotify/token.server");
-          try {
-            const token = await getFreshSpotifyAccessToken(userId);
-            const headers = { Authorization: `Bearer ${token}` };
-            // Read the body as text first so a non-JSON error page (e.g. a 401
-            // "Check settings" from an expired/invalid token) surfaces cleanly
-            // instead of blowing up JSON.parse.
-            const spotifyGet = async (url: string) => {
-              const res = await fetch(url, { headers });
-              const body = await res.text();
-              if (!res.ok) throw new Error(`Spotify ${res.status}: ${body.slice(0, 200)}`);
-              return body ? JSON.parse(body) : {};
-            };
-
-            const q = `track:${a.song} artist:${a.artist}`;
-            const search = await spotifyGet(`https://api.spotify.com/v1/search?q=${encodeURIComponent(q)}&type=track&limit=1`);
-            const track = search?.tracks?.items?.[0];
-            if (!track) {
-              executed.push({ type: a.type, ok: false, label: `Couldn't find "${a.song}" by ${a.artist} on Spotify` });
-            } else {
-              const devicesJson = await spotifyGet("https://api.spotify.com/v1/me/player/devices");
-              const devices: any[] = devicesJson?.devices || [];
-              const device = devices.find((d) => d.is_active) || devices[0];
-              if (!device) {
-                executed.push({ type: a.type, ok: false, label: "No active Spotify device — open Spotify on your phone or computer first" });
-              } else {
-                const playRes = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${device.id}`, {
-                  method: "PUT",
-                  headers: { ...headers, "Content-Type": "application/json" },
-                  body: JSON.stringify({ uris: [track.uri] }),
-                });
-                if (playRes.ok) executed.push({ type: a.type, ok: true, label: `🎵 Playing "${track.name}" by ${track.artists?.[0]?.name} on ${device.name}` });
-                else executed.push({ type: a.type, ok: false, label: `Spotify playback error: ${playRes.status}${playRes.status === 403 ? " (Premium required)" : ""}` });
-              }
-            }
-          } catch (e) {
-            executed.push({ type: a.type, ok: false, label: `Spotify error: ${(e as Error).message}` });
           }
         } else if (a.type === "draft_email") {
           const { getFreshGoogleAccessToken } = await import("@/integrations/google/token.server");

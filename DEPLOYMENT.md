@@ -10,7 +10,6 @@ This project is a **TanStack Start v1** app (Vite 7, React 19, SSR-ready) backed
 - A Supabase project (URL + publishable key + service role key), with the **Google** auth provider enabled (Client ID + Secret from Google Cloud Console, with the Gmail + Calendar + Tasks scopes allowed on the OAuth consent screen)
 - A [Google AI Studio](https://aistudio.google.com/) API key for Gemini (chat, vision, PDF, TTS)
 - Optional: a [GitHub OAuth App](https://github.com/settings/developers) if you want the GitHub connection (notifications) — free, no billing required
-- Optional: a [Spotify app](https://developer.spotify.com/dashboard) if you want voice-commanded playback ("play X by Y") — free to create, but playback control requires the connecting user to have **Spotify Premium**
 - Optional: any custom news/weather keys (defaults use free Open-Meteo + Google News RSS)
 
 ### Required environment variables
@@ -28,8 +27,6 @@ This project is a **TanStack Start v1** app (Vite 7, React 19, SSR-ready) backed
 | `GOOGLE_OAUTH_CLIENT_SECRET` | server | Secret for the above |
 | `VITE_GITHUB_OAUTH_CLIENT_ID` | client + server | GitHub OAuth App client ID (public) — used to build the authorize URL and, server-side, to exchange the code |
 | `GITHUB_OAUTH_CLIENT_SECRET` | server | Secret for the above |
-| `VITE_SPOTIFY_CLIENT_ID` | client + server | Spotify app client ID (public) — used to build the authorize URL and, server-side, to exchange the code / refresh tokens |
-| `SPOTIFY_CLIENT_SECRET` | server | Secret for the above |
 
 > Copy `.env.example` → `.env` and fill values for local dev.
 
@@ -151,7 +148,6 @@ Sample JSON files are in the `aws/` directory.
 - [ ] Test `/vision` upload (image + PDF).
 - [ ] Confirm Gmail / Calendar / Tasks connectors return data (reconnect Google from Settings if needed — this requires `GOOGLE_OAUTH_CLIENT_ID`/`GOOGLE_OAUTH_CLIENT_SECRET` to be set so tokens can refresh).
 - [ ] If using the GitHub connection, verify its OAuth App's callback URL is set to `<deployed origin>/settings` and `VITE_GITHUB_OAUTH_CLIENT_ID`/`GITHUB_OAUTH_CLIENT_SECRET` are set.
-- [ ] If using the Spotify connection, verify its app's Redirect URI is set to `<deployed origin>/settings`, `VITE_SPOTIFY_CLIENT_ID`/`SPOTIFY_CLIENT_SECRET` are set, and test "play &lt;song&gt; by &lt;artist&gt;" with Spotify open on a device (Premium required).
 - [ ] Run a Lighthouse pass on the deployed URL.
 
 ---
